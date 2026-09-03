@@ -329,25 +329,30 @@
     /* ================= Firestore data layer ================= */
 
     async function fsGetEntriesForDate(dateStr) {
+      // One query for the whole date instead of one getDoc per worker (was the main slowness cause).
+      const q = query(collection(db, "entries"), where("date", "==", dateStr));
+      const snap = await getDocs(q);
+      const byKey = {};
+      snap.forEach((docSnap) => {
+        const d = docSnap.data();
+        byKey[d.section + "__" + d.number] = d;
+      });
+
       const bySection = { CO: [], Spl: [], SP: [] };
-      for (const sec of SECTIONS) {
-        const rows = [];
-        for (const num of sec.numbers) {
-          const id = dateStr + "__" + sec.key + "__" + num;
-          const snap = await getDoc(doc(db, "entries", id));
-          const d = snap.exists() ? snap.data() : {};
+      SECTIONS.forEach((sec) => {
+        bySection[sec.key] = sec.numbers.map((num) => {
+          const d = byKey[sec.key + "__" + num] || {};
           const beedi = d.beedi ?? "";
           const advance = d.advance ?? "";
           const w = wageFor(beedi);
-          rows.push({
+          return {
             number: num, beedi: beedi, advance: advance,
             patti: d.patti ?? "", others: d.others ?? "",
             kooli: w.wage, balance: (w.wage || 0) - (Number(advance) || 0),
             carry: w.carry, overMax: !!w.overMax,
-          });
-        }
-        bySection[sec.key] = rows;
-      }
+          };
+        });
+      });
       return bySection;
     }
 
@@ -369,10 +374,10 @@
     async function fsGetExpensesForDate(dateStr) {
       const types = ["StaffPayment", "OtherDaily", "NonDaily", "Income"];
       const out = {};
-      for (const type of types) {
-        const snap = await getDoc(doc(db, "expenses", dateStr + "__" + type));
-        out[type] = snap.exists() ? (snap.data().items || []) : [];
-      }
+      const snaps = await Promise.all(types.map((type) => getDoc(doc(db, "expenses", dateStr + "__" + type))));
+      types.forEach((type, i) => {
+        out[type] = snaps[i].exists() ? (snaps[i].data().items || []) : [];
+      });
       return out;
     }
 
@@ -656,6 +661,7 @@
       tally.textContent = "Bal Cash: " + balCash;
       tally.classList.toggle("balanced", balCash >= 0);
     }
+    window.recalc = recalc;
 
     function setStatus(msg) {
       document.getElementById("status").textContent = msg;
