@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>റിംഗ് ബീഡി കണക്ക്</title>
+  <style>
+    html, body { width: 100%; overflow-x: hidden; margin: 0; }
+    :root {
+      --paper: #EAF1EA; --rule: #B23A48; --ink: #1F2E2A; --ink-soft: #4C5F58;
+      --accent-co: #6E8B67; --accent-spl: #2E6E7E; --accent-sp: #8C5A3C; --card: #F5F8F3;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: Georgia, 'Noto Sans Malayalam', serif; background: var(--paper); color: var(--ink);
+      margin: 0; padding: 14px 12px 40px 18px; border-left: 6px double var(--rule);
+    }
+    .num { font-family: ui-monospace, Menlo, Consolas, monospace; }
+    h1 { font-size: 19px; margin: 0 0 2px 0; }
+    .subtitle { color: var(--ink-soft); font-size: 12.5px; margin-bottom: 14px; }
+    .day-picker { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; }
+    .day-btn, .action-btn {
+      font-family: inherit; font-size: 13px; padding: 6px 12px; border-radius: 3px;
+      border: 1px solid var(--rule); background: var(--card); color: var(--ink); cursor: pointer;
+    }
+    .day-btn.active { background: var(--rule); color: #fff; }
+    .action-btn.primary { background: var(--accent-co); color: #fff; border-color: var(--accent-co); }
+    input[type=date], input[type=email], input[type=password] {
+      font-family: inherit; font-size: 13px; padding: 6px; border: 1px solid #C8D3C9;
+      border-radius: 3px; background: var(--card);
+    }
+    .card { background: var(--card); border: 1px solid #D3DFD3; border-radius: 4px; margin-bottom: 14px; overflow: hidden; }
+    .card-head { border-left: 4px solid; padding: 8px 10px; font-weight: bold; font-size: 14px; background: rgba(0,0,0,0.02); }
+    .rows-scroll { overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; min-width: 430px; }
+    th, td { padding: 6px 7px; font-size: 13.5px; border-bottom: 1px dashed #D3DFD3; text-align: right; }
+    th { color: var(--ink-soft); font-size: 11px; text-align: right; }
+    th:first-child, td:first-child { text-align: center; }
+    td input {
+      width: 100%; max-width: 66px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 14px;
+      text-align: right; padding: 7px 5px; border: 1px solid #CBD8CC; border-radius: 4px; min-height: 34px;
+    }
+    .readonly { font-weight: bold; }
+    .balance { color: var(--rule); }
+    .section-totals { display: flex; flex-wrap: wrap; gap: 10px; font-size: 11.5px; padding: 6px 10px; background: rgba(0,0,0,0.03); }
+    .field-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 10px; font-size: 13px; }
+    .field-row input { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; text-align: right; width: 100px; padding: 4px 6px; border: 1px solid #CBD8CC; border-radius: 3px; }
+    .expense-block { padding: 6px 10px 10px 10px; }
+    .expense-title { font-size: 11.5px; color: var(--ink-soft); margin-bottom: 4px; }
+    .expense-row { display: flex; gap: 6px; margin-bottom: 4px; }
+    .expense-row input.label { flex: 1.6; text-align: left; }
+    .expense-row input.amount { flex: 1; text-align: right; }
+    .expense-row input { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; padding: 4px; border: 1px solid #CBD8CC; border-radius: 3px; }
+    .add-row-btn { font-size: 12px; background: none; border: none; color: var(--ink-soft); cursor: pointer; padding: 4px 0; }
+    .divider { border-top: 1px solid #D3DFD3; margin: 8px 10px; }
+    .tally { margin: 8px 10px; padding: 10px; border-radius: 4px; text-align: center; font-weight: bold; border: 2px solid var(--rule); color: var(--rule); }
+    .tally.balanced { border-color: var(--accent-co); color: var(--accent-co); }
+    .status { font-size: 12px; color: var(--ink-soft); padding: 4px 10px; }
+    .ledger-table { width: 100%; min-width: 360px; border-collapse: collapse; }
+    .ledger-table td { padding: 5px 6px; font-size: 12.5px; border-bottom: 1px dotted #E3E9E3; vertical-align: middle; white-space: nowrap; }
+    .ledger-table td:first-child { width: 45%; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+    .ledger-table td:nth-child(2), .ledger-table td:nth-child(3) { text-align: right; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
+    .ledger-head-row td { font-weight: bold; font-size: 14px; border-bottom: 2px solid var(--ink); background: rgba(0,0,0,0.03); }
+    .ledger-table input.desc { width: 100%; min-width: 90px; border: none; background: transparent; font: inherit; font-size: 12px; text-align: left; padding: 2px 0; box-sizing: border-box; }
+    .ledger-table input.amt { width: 100%; min-width: 64px; border: none; border-bottom: 1px dotted #CBD8CC; background: transparent; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; text-align: right; padding: 2px 0; box-sizing: border-box; }
+    .ledger-total-row td { font-weight: bold; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink); }
+    .ledger-summary-cell { color: var(--rule); font-weight: bold; }
+    .ledger-summary-row-cb td { border-top: 2px solid var(--rule); font-size: 14px; }
+    .ledger-add-row td { padding: 2px 6px; }
+    .overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:50; align-items:center; justify-content:center; }
+    .overlay .box { background:var(--paper); border-left:6px double var(--rule); max-width:480px; width:92%; max-height:85vh; overflow-y:auto; border-radius:4px; padding:16px; }
+    #login-screen { max-width: 340px; margin: 60px auto; text-align: center; }
+    #login-screen input { width: 100%; margin-bottom: 10px; }
+    #login-screen .action-btn { width: 100%; }
+    #login-error { color: var(--rule); font-size: 12px; margin-top: 8px; }
+    .stub-note { background: var(--card); border: 1px dashed #C8D3C9; border-radius: 4px; padding: 14px; color: var(--ink-soft); font-size: 13px; }
+  </style>
+</head>
+<body>
+
+  <div id="login-screen">
+    <h1>റിംഗ് ബീഡി കണക്ക്</h1>
+    <div class="subtitle">Firebase · Sign in</div>
+    <input type="email" id="login-email" placeholder="Email">
+    <input type="password" id="login-password" placeholder="Password">
+    <button class="action-btn primary" onclick="doLogin()">Sign in</button>
+    <div id="login-error"></div>
+  </div>
+
+  <div id="app-shell" style="display:none;">
+    <h1>റിംഗ് ബീഡി കണക്ക്</h1>
+    <div class="subtitle">Firebase · Entry · Company Ledger · Stock · Settings · Reports</div>
+
+    <div class="day-picker">
+      <button class="day-btn tab-btn active" id="tabbtn-entry" onclick="switchTab('entry')">Entry</button>
+      <button class="day-btn tab-btn" id="tabbtn-ledger" onclick="switchTab('ledger')">Company Ledger</button>
+      <button class="day-btn tab-btn" id="tabbtn-stock" onclick="switchTab('stock')">Stock</button>
+      <button class="day-btn tab-btn" id="tabbtn-settings" onclick="switchTab('settings')">Settings</button>
+      <button class="day-btn tab-btn" id="tabbtn-reports" onclick="switchTab('reports')">Reports</button>
+      <button class="day-btn" onclick="doLogout()" style="margin-left:auto;">Logout</button>
+    </div>
+
+    <!-- ===================== ENTRY TAB ===================== -->
+    <div id="tab-entry">
+      <div class="day-picker">
+        <button class="day-btn active" id="btn-monday" onclick="setDay('Monday')">Monday</button>
+        <button class="day-btn" id="btn-thursday" onclick="setDay('Thursday')">Thursday</button>
+        <input type="date" id="date-input" onchange="loadDay()">
+        <button class="action-btn" onclick="loadDay()">Load</button>
+      </div>
+
+      <div id="sections"></div>
+
+      <div class="card">
+        <div class="card-head" style="border-left-color: var(--rule);">ദിവസത്തെ ക്യാഷ് കണക്ക്</div>
+        <div class="field-row">
+          <span>Cash in Hand</span>
+          <input type="text" id="cash-in-hand" inputmode="numeric" oninput="recalc()">
+        </div>
+        <div class="field-row"><span>അടവ് — CO</span><span class="num readonly" id="advance-co">0</span></div>
+        <div class="field-row"><span>അടവ് — SP + Spl</span><span class="num readonly" id="advance-spspl">0</span></div>
+
+        <div class="divider"></div>
+        <div class="expense-title" style="padding: 0 10px;">ചെലവുകൾ</div>
+        <div class="field-row"><span>കൂലി (gross)</span><span class="num readonly" id="gross-wage">0</span></div>
+
+        <div class="expense-block">
+          <div class="expense-title">സ്ഥിരം ജീവനക്കാരുടെ പേയ്‌മെന്റ്</div>
+          <div id="staff-list"></div>
+          <button class="add-row-btn" onclick="addExpense('StaffPayment')">+ ചേർക്കുക</button>
+        </div>
+        <div class="expense-block">
+          <div class="expense-title">മറ്റ് ചെലവുകൾ</div>
+          <div id="other-list"></div>
+          <button class="add-row-btn" onclick="addExpense('OtherDaily')">+ ചേർക്കുക</button>
+        </div>
+
+        <div class="field-row"><span>പറ്റ് (worker രേഖകൾ)</span><span class="num readonly" id="patti-total">0</span></div>
+        <div class="field-row"><span>Others (worker രേഖകൾ)</span><span class="num readonly" id="others-total">0</span></div>
+
+        <div class="divider"></div>
+        <div class="tally" id="bal-cash-tally">Bal Cash: 0</div>
+
+        <div style="padding: 0 10px 12px 10px; text-align: right;">
+          <button class="action-btn primary" onclick="openReview()">ഈ ദിവസം Save ചെയ്യുക</button>
+        </div>
+        <div class="status" id="status"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head" style="border-left-color: var(--accent-spl);">ബീഡി ബണ്ടിൽ (ഇന്ന്)</div>
+        <div class="field-row"><span>ORD (CO + SP)</span><span class="num readonly" id="ord-bundle-text">0 bundle, 0 കെട്ട്</span></div>
+        <div class="field-row"><span>SPL (Spl)</span><span class="num readonly" id="spl-bundle-text">0 bundle, 0 കെട്ട്</span></div>
+      </div>
+
+      <div id="review-overlay" class="overlay">
+        <div class="box">
+          <h1 style="font-size:16px;">Review — Save ചെയ്യുന്നതിന് മുൻപ്</h1>
+          <div id="review-body" style="font-size:13px;"></div>
+          <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:14px;">
+            <button class="day-btn" onclick="closeReview()">Edit ചെയ്യാം</button>
+            <button class="action-btn primary" onclick="confirmSave()">Accept &amp; Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== COMPANY LEDGER TAB ===================== -->
+    <div id="tab-ledger" style="display:none">
+      <div class="day-picker">
+        <input type="date" id="ledger-date-input" onchange="loadLedger()">
+        <button class="action-btn" onclick="loadLedger()">Load</button>
+      </div>
+      <div class="card">
+        <div class="rows-scroll">
+          <table class="ledger-table">
+            <thead><tr class="ledger-head-row"><td id="ledger-date-display">—</td><td id="ledger-day-display">—</td><td></td></tr></thead>
+            <tbody id="ledger-table-body"></tbody>
+          </table>
+        </div>
+        <div style="padding: 10px 10px 12px 10px; text-align: right;">
+          <button class="action-btn primary" onclick="openLedgerReview()">Save ചെയ്യുക</button>
+        </div>
+        <div class="status" id="ledger-status"></div>
+      </div>
+
+      <div id="ledger-review-overlay" class="overlay">
+        <div class="box">
+          <h1 style="font-size:16px;">Review — Company Ledger</h1>
+          <div id="ledger-review-body" style="font-size:13px;"></div>
+          <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:14px;">
+            <button class="day-btn" onclick="closeLedgerReview()">Edit ചെയ്യാം</button>
+            <button class="action-btn primary" onclick="confirmSaveLedger()">Accept &amp; Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== STUBS (phase 2) ===================== -->
+    <div id="tab-stock" style="display:none">
+      <div class="stub-note">Stock book — അടുത്ത ഘട്ടത്തിൽ ചേർക്കും.</div>
+    </div>
+    <div id="tab-settings" style="display:none">
+      <div class="stub-note">Worker Settings — അടുത്ത ഘട്ടത്തിൽ ചേർക്കും.</div>
+    </div>
+    <div id="tab-reports" style="display:none">
+      <div class="stub-note">Reports (Daily / Period / Workers പറ്റ്) — അടുത്ത ഘട്ടത്തിൽ ചേർക്കും.</div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import {
+      getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import {
+      getFirestore, doc, getDoc, setDoc, collection, query, where, getDocs,
+      orderBy, limit
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCqkMBIfJQ1SWfCLJHN66dmB_9V1l_9Al4",
+      authDomain: "ring-beedi-co.firebaseapp.com",
+      projectId: "ring-beedi-co",
+      storageBucket: "ring-beedi-co.firebasestorage.app",
+      messagingSenderId: "236510277161",
+      appId: "1:236510277161:web:cb63368482f61bc83bb638"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    /* ---------------- Auth ---------------- */
+    window.doLogin = function () {
+      const email = document.getElementById("login-email").value.trim();
+      const password = document.getElementById("login-password").value;
+      document.getElementById("login-error").textContent = "";
+      signInWithEmailAndPassword(auth, email, password).catch((err) => {
+        document.getElementById("login-error").textContent = err.message;
+      });
+    };
+
+    window.doLogout = function () {
+      signOut(auth);
+    };
+
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        document.getElementById("login-screen").style.display = "none";
+        document.getElementById("app-shell").style.display = "";
+        init();
+      } else {
+        document.getElementById("login-screen").style.display = "";
+        document.getElementById("app-shell").style.display = "none";
+      }
+    });
+
+    /* ---------------- Wage table & worker master lists ---------------- */
+    const WAGE_TABLE = {
+      5: 22, 10: 43, 15: 65, 20: 86, 25: 108, 30: 129, 35: 151, 40: 172, 45: 194,
+      50: 215, 55: 237, 60: 258, 65: 280, 70: 301, 75: 323, 80: 344, 85: 366,
+      90: 387, 95: 409, 100: 430, 105: 452, 110: 473, 115: 495, 120: 510,
+      125: 538, 130: 559, 135: 581, 140: 602, 145: 624, 150: 645, 155: 667,
+      160: 688, 165: 710, 170: 731, 175: 753, 180: 774, 185: 796, 190: 817,
+      195: 839, 200: 860, 205: 882, 210: 903, 215: 925, 220: 946, 225: 968,
+      230: 989, 235: 1011, 240: 1032, 245: 1054, 250: 1075,
+    };
+
+    const CO_NUMBERS = [4, 9, 15, 18, 24, 27, 29, 59, 62, 73, 80, 81, 89, 96, 97, 98, 100, 102, 106];
+    const SPL_NUMBERS = [232, 241, 266, 280, 300, 326, 342, 353, 383, 394, 407, 418, 421, 422, 437, 445, 456, 457, 458, 459, 460];
+    const SP_NUMBERS = [205, 206, 209, 211, 214, 222, 234, 254, 267, 268, 269, 270, 282, 297, 325, 335, 341, 346, 351, 354, 358, 405, 413, 432, 449, 457];
+
+    const SECTIONS = [
+      { key: "CO", label: "CO", accent: "var(--accent-co)", numbers: CO_NUMBERS },
+      { key: "Spl", label: "Spl", accent: "var(--accent-spl)", numbers: SPL_NUMBERS },
+      { key: "SP", label: "SP", accent: "var(--accent-sp)", numbers: SP_NUMBERS },
+    ];
+
+    function wageFor(beedi) {
+      const n = Number(beedi) || 0;
+      const usable = Math.floor(n / 5) * 5;
+      const carry = n - usable;
+      if (usable <= 0) return { wage: 0, usable: 0, carry: carry };
+      if (usable > 250) return { wage: null, usable: usable, carry: carry, overMax: true };
+      return { wage: WAGE_TABLE[usable] || 0, usable: usable, carry: carry };
+    }
+
+    function toBundles(kettu) {
+      const n = Number(kettu) || 0;
+      return { b: Math.floor(n / 24), r: n % 24 };
+    }
+
+    function todayStr() {
+      const d = new Date();
+      const tz = d.getTimezoneOffset() * 60000;
+      return new Date(d - tz).toISOString().slice(0, 10);
+    }
+
+    function weekdayName(dateStr) {
+      const parts = String(dateStr).split("-").map(Number);
+      const d = new Date(parts[0], parts[1] - 1, parts[2]);
+      const names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+      return names[d.getDay()];
+    }
+
+    function formatHeadingDate(dateStr) {
+      const parts = String(dateStr).split("-").map(Number);
+      if (parts.length !== 3 || parts.some(isNaN)) return dateStr;
+      const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      const dd = String(parts[2]).padStart(2, "0");
+      const dayName = weekdayName(dateStr).toUpperCase();
+      return dd + "-" + months[parts[1] - 1] + "-" + parts[0] + " - " + dayName;
+    }
+
+    function bz(v) {
+      const n = Number(v);
+      return (!v && v !== 0) || n === 0 ? "" : v;
+    }
+
+    function sum(list, key) {
+      return (list || []).reduce((s, r) => s + (Number(r[key]) || 0), 0);
+    }
+
+    function sumAmt(items) {
+      return (items || []).reduce((s, it) => s + (Number(it.amount) || 0), 0);
+    }
+
+    /* ================= Firestore data layer ================= */
+
+    async function fsGetEntriesForDate(dateStr) {
+      const bySection = { CO: [], Spl: [], SP: [] };
+      for (const sec of SECTIONS) {
+        const rows = [];
+        for (const num of sec.numbers) {
+          const id = dateStr + "__" + sec.key + "__" + num;
+          const snap = await getDoc(doc(db, "entries", id));
+          const d = snap.exists() ? snap.data() : {};
+          const beedi = d.beedi ?? "";
+          const advance = d.advance ?? "";
+          const w = wageFor(beedi);
+          rows.push({
+            number: num, beedi: beedi, advance: advance,
+            patti: d.patti ?? "", others: d.others ?? "",
+            kooli: w.wage, balance: (w.wage || 0) - (Number(advance) || 0),
+            carry: w.carry, overMax: !!w.overMax,
+          });
+        }
+        bySection[sec.key] = rows;
+      }
+      return bySection;
+    }
+
+    async function fsSaveEntries(dateStr, day, entries) {
+      const promises = entries.map((e) => {
+        const id = dateStr + "__" + e.section + "__" + e.number;
+        const w = wageFor(e.beedi);
+        return setDoc(doc(db, "entries", id), {
+          date: dateStr, day: day, section: e.section, number: String(e.number),
+          beedi: Number(e.beedi) || 0, kooli: w.wage || 0, advance: Number(e.advance) || 0,
+          balance: (w.wage || 0) - (Number(e.advance) || 0),
+          patti: Number(e.patti) || 0, others: Number(e.others) || 0,
+          usable: w.usable, carry: w.carry,
+        });
+      });
+      await Promise.all(promises);
+    }
+
+    async function fsGetExpensesForDate(dateStr) {
+      const types = ["StaffPayment", "OtherDaily", "NonDaily", "Income"];
+      const out = {};
+      for (const type of types) {
+        const snap = await getDoc(doc(db, "expenses", dateStr + "__" + type));
+        out[type] = snap.exists() ? (snap.data().items || []) : [];
+      }
+      return out;
+    }
+
+    async function fsSaveExpenses(dateStr, expensesByType) {
+      const promises = Object.keys(expensesByType).map((type) => {
+        const items = (expensesByType[type] || []).filter((it) => it.label || it.amount)
+          .map((it) => ({ label: it.label || "", amount: Number(it.amount) || 0 }));
+        return setDoc(doc(db, "expenses", dateStr + "__" + type), { date: dateStr, type: type, items: items });
+      });
+      await Promise.all(promises);
+    }
+
+    async function fsGetCashSummary(dateStr) {
+      const snap = await getDoc(doc(db, "cashSummary", dateStr));
+      return snap.exists() ? snap.data() : null;
+    }
+
+    async function fsComputeAndSaveCashSummary(dateStr, day, cashInHand) {
+      const entriesBySection = await fsGetEntriesForDate(dateStr);
+      const expenses = await fsGetExpensesForDate(dateStr);
+      const co = entriesBySection.CO, spl = entriesBySection.Spl, sp = entriesBySection.SP;
+
+      const grossWage = sum(co, "kooli") + sum(spl, "kooli") + sum(sp, "kooli");
+      const advanceCO = sum(co, "advance");
+      const advanceSPSpl = sum(sp, "advance") + sum(spl, "advance");
+      const pattiTotal = sum(co, "patti") + sum(spl, "patti") + sum(sp, "patti");
+      const othersTotal = sum(co, "others") + sum(spl, "others") + sum(sp, "others");
+      const staffTotal = sumAmt(expenses.StaffPayment);
+      const otherTotal = sumAmt(expenses.OtherDaily);
+
+      const cash = Number(cashInHand) || 0;
+      const totalAvailable = cash + advanceCO + advanceSPSpl;
+      const totalOutgo = grossWage + staffTotal + otherTotal + pattiTotal;
+      const balCash = totalAvailable - totalOutgo + othersTotal;
+
+      await setDoc(doc(db, "cashSummary", dateStr), {
+        date: dateStr, day: day, cashInHand: cash, advanceCO, advanceSPSpl, totalAvailable,
+        grossWage, staffTotal, otherTotal, pattiTotal, othersTotal, totalOutgo, balCash,
+      });
+      return { balCash };
+    }
+
+    async function fsGetPreviousClosingBalance(dateStr) {
+      const q = query(collection(db, "companyLedger"), where("date", "<", dateStr), orderBy("date", "desc"), limit(1));
+      const snap = await getDocs(q);
+      if (snap.empty) return 0;
+      return Number(snap.docs[0].data().cb) || 0;
+    }
+
+    async function fsGetCompanyLedgerForDate(dateStr) {
+      const entriesBySection = await fsGetEntriesForDate(dateStr);
+      const expenses = await fsGetExpensesForDate(dateStr);
+      const co = entriesBySection.CO, spl = entriesBySection.Spl, sp = entriesBySection.SP;
+
+      const advanceCO = sum(co, "advance");
+      const advanceSPSpl = sum(sp, "advance") + sum(spl, "advance");
+      const grossWage = sum(co, "kooli") + sum(spl, "kooli") + sum(sp, "kooli");
+      const pattiTotal = sum(co, "patti") + sum(spl, "patti") + sum(sp, "patti");
+      const othersTotal = sum(co, "others") + sum(spl, "others") + sum(sp, "others");
+      const staffTotal = sumAmt(expenses.StaffPayment);
+      const otherTotal = sumAmt(expenses.OtherDaily);
+      const nonDailyTotal = sumAmt(expenses.NonDaily);
+      const saleIncomeTotal = sumAmt(expenses.Income);
+
+      const existingSnap = await getDoc(doc(db, "companyLedger", dateStr));
+      const existing = existingSnap.exists() ? existingSnap.data() : null;
+      const autoOB = await fsGetPreviousClosingBalance(dateStr);
+      const ob = existing && existing.ob !== undefined && existing.ob !== "" ? Number(existing.ob) : autoOB;
+
+      const totalIncome = advanceCO + advanceSPSpl + saleIncomeTotal;
+      const total = ob + totalIncome;
+      const totalExpense = grossWage + staffTotal + otherTotal + nonDailyTotal + pattiTotal;
+      const closingBalance = total - totalExpense + othersTotal;
+
+      return {
+        date: dateStr, ob, obIsAuto: !existing, advanceCO, advanceSPSpl,
+        incomeItems: expenses.Income, nonDailyItems: expenses.NonDaily,
+        staffItems: expenses.StaffPayment, otherItems: expenses.OtherDaily,
+        grossWage, staffTotal, otherTotal, pattiTotal, othersTotal,
+        totalIncome, total, totalExpense, closingBalance,
+      };
+    }
+
+    async function fsSaveCompanyLedger(dateStr, obOverride, incomeItems, nonDailyItems) {
+      await fsSaveExpenses(dateStr, { Income: incomeItems, NonDaily: nonDailyItems });
+      const computed = await fsGetCompanyLedgerForDate(dateStr);
+      const ob = obOverride !== "" && obOverride !== null && obOverride !== undefined ? Number(obOverride) : computed.ob;
+      const totalIncome = computed.advanceCO + computed.advanceSPSpl + sumAmt(incomeItems);
+      const total = ob + totalIncome;
+      const totalExpense = computed.grossWage + computed.staffTotal + computed.otherTotal + sumAmt(nonDailyItems) + computed.pattiTotal;
+      const closingBalance = total - totalExpense + computed.othersTotal;
+
+      await setDoc(doc(db, "companyLedger", dateStr), {
+        date: dateStr, ob, advanceCO: computed.advanceCO, advanceSPSpl: computed.advanceSPSpl,
+        saleIncome: sumAmt(incomeItems), totalIncome, total, grossWage: computed.grossWage,
+        staffTotal: computed.staffTotal, otherTotal: computed.otherTotal, nonDailyTotal: sumAmt(nonDailyItems),
+        pattiTotal: computed.pattiTotal, totalExpense, othersTotal: computed.othersTotal, cb: closingBalance,
+      });
+      return { ob, totalIncome, total, totalExpense, closingBalance };
+    }
+
+    /* ================= Tabs ================= */
+    window.switchTab = function (name) {
+      ["entry", "ledger", "stock", "settings", "reports"].forEach((t) => {
+        document.getElementById("tab-" + t).style.display = t === name ? "" : "none";
+        document.getElementById("tabbtn-" + t).classList.toggle("active", t === name);
+      });
+      if (name === "ledger") loadLedger();
+    };
+
+    /* ================= Entry tab ================= */
+    let entriesData = { CO: [], Spl: [], SP: [] };
+    let expensesData = { StaffPayment: [], OtherDaily: [], NonDaily: [], Income: [] };
+    let currentDate = "";
+    let currentDay = "Monday";
+    let autoSaveTimer = null;
+    const AUTO_SAVE_INTERVAL_MS = 15 * 60 * 1000;
+
+    window.setDay = function (day) {
+      currentDay = day;
+      document.getElementById("btn-monday").classList.toggle("active", day === "Monday");
+      document.getElementById("btn-thursday").classList.toggle("active", day === "Thursday");
+    };
+
+    function init() {
+      document.getElementById("date-input").value = todayStr();
+      loadDay();
+    }
+
+    window.loadDay = async function () {
+      currentDate = document.getElementById("date-input").value || todayStr();
+      document.getElementById("date-input").value = currentDate;
+      setDay(weekdayName(currentDate));
+      setStatus("Loading...");
+      startAutoSave();
+
+      entriesData = await fsGetEntriesForDate(currentDate);
+      renderSections();
+      recalc();
+
+      expensesData = await fsGetExpensesForDate(currentDate);
+      if (!expensesData.StaffPayment || expensesData.StaffPayment.length === 0) {
+        expensesData.StaffPayment = [
+          { label: "Rafeek", amount: "" },
+          { label: "Basheer", amount: "" },
+          { label: "Alavi-Mayami", amount: "" },
+        ];
+      }
+      renderExpenses();
+      recalc();
+
+      const cs = await fsGetCashSummary(currentDate);
+      document.getElementById("cash-in-hand").value = cs && cs.cashInHand ? cs.cashInHand : "";
+      recalc();
+      setStatus("");
+    };
+
+    function renderSections() {
+      const root = document.getElementById("sections");
+      root.innerHTML = "";
+      SECTIONS.forEach((sec) => {
+        const rows = entriesData[sec.key] || [];
+        const card = document.createElement("div");
+        card.className = "card";
+        card.innerHTML = `
+          <div class="card-head" style="border-left-color:${sec.accent}">${sec.label} — ${rows.length} തൊഴിലാളികൾ</div>
+          <div class="rows-scroll">
+            <table>
+              <thead><tr>
+                <th>നമ്പർ</th><th>ബീഡി</th><th>കൂലി</th><th>അടവ്</th><th>ബാക്കി</th><th>പറ്റ്</th><th>Others</th>
+              </tr></thead>
+              <tbody id="tbody-${sec.key}"></tbody>
+            </table>
+          </div>
+          <div class="section-totals" id="totals-${sec.key}"></div>
+        `;
+        root.appendChild(card);
+        const tbody = card.querySelector(`#tbody-${sec.key}`);
+        rows.forEach((r, idx) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td class="readonly">${r.number}</td>
+            <td><input type="text" inputmode="numeric" value="${bz(r.beedi)}" data-sec="${sec.key}" data-idx="${idx}" data-field="beedi" oninput="onCellInput(this)"></td>
+            <td class="readonly" id="kooli-${sec.key}-${idx}">${bz(r.kooli)}</td>
+            <td><input type="text" inputmode="numeric" value="${bz(r.advance)}" data-sec="${sec.key}" data-idx="${idx}" data-field="advance" oninput="onCellInput(this)"></td>
+            <td class="readonly balance" id="balance-${sec.key}-${idx}">${bz(r.balance)}</td>
+            <td><input type="text" inputmode="numeric" value="${bz(r.patti)}" data-sec="${sec.key}" data-idx="${idx}" data-field="patti" oninput="onCellInput(this)"></td>
+            <td><input type="text" inputmode="numeric" value="${bz(r.others)}" data-sec="${sec.key}" data-idx="${idx}" data-field="others" oninput="onCellInput(this)"></td>
+          `;
+          tbody.appendChild(tr);
+        });
+      });
+    }
+
+    window.onCellInput = function (el) {
+      const sec = el.dataset.sec, idx = Number(el.dataset.idx), field = el.dataset.field;
+      entriesData[sec][idx][field] = el.value;
+      if (field === "beedi" || field === "advance") {
+        const r = entriesData[sec][idx];
+        const w = wageFor(r.beedi);
+        r.kooli = w.wage || 0;
+        r.balance = (w.wage || 0) - (Number(r.advance) || 0);
+        document.getElementById(`kooli-${sec}-${idx}`).textContent = w.overMax ? "manual" : bz(w.wage || 0);
+        document.getElementById(`balance-${sec}-${idx}`).textContent = bz(r.balance);
+      }
+      recalc();
+    };
+
+    function renderExpenses() {
+      renderExpenseList("staff-list", "StaffPayment");
+      renderExpenseList("other-list", "OtherDaily");
+    }
+
+    function renderExpenseList(containerId, type) {
+      const c = document.getElementById(containerId);
+      c.innerHTML = "";
+      (expensesData[type] || []).forEach((it, idx) => {
+        const row = document.createElement("div");
+        row.className = "expense-row";
+        row.innerHTML = `
+          <input class="label" type="text" value="${it.label || ''}" data-type="${type}" data-idx="${idx}" data-field="label" oninput="onExpenseInput(this)">
+          <input class="amount" type="text" inputmode="numeric" value="${it.amount || ''}" data-type="${type}" data-idx="${idx}" data-field="amount" oninput="onExpenseInput(this)">
+        `;
+        c.appendChild(row);
+      });
+    }
+
+    window.addExpense = function (type) {
+      expensesData[type] = expensesData[type] || [];
+      expensesData[type].push({ label: "", amount: "" });
+      renderExpenses();
+    };
+
+    window.onExpenseInput = function (el) {
+      const type = el.dataset.type, idx = Number(el.dataset.idx), field = el.dataset.field;
+      expensesData[type][idx][field] = el.value;
+      recalc();
+    };
+
+    function sumUsable(list) {
+      return (list || []).reduce((s, r) => s + wageFor(r.beedi).usable, 0);
+    }
+
+    function recalc() {
+      const co = entriesData.CO || [], spl = entriesData.Spl || [], sp = entriesData.SP || [];
+      const grossWage = sum(co, "kooli") + sum(spl, "kooli") + sum(sp, "kooli");
+      const advanceCO = sum(co, "advance");
+      const advanceSPSpl = sum(sp, "advance") + sum(spl, "advance");
+      const pattiTotal = sum(co, "patti") + sum(spl, "patti") + sum(sp, "patti");
+      const othersTotal = sum(co, "others") + sum(spl, "others") + sum(sp, "others");
+      const staffTotal = sum(expensesData.StaffPayment, "amount");
+      const otherTotal = sum(expensesData.OtherDaily, "amount");
+      const cash = Number(document.getElementById("cash-in-hand").value) || 0;
+      const totalAvailable = cash + advanceCO + advanceSPSpl;
+      const totalOutgo = grossWage + staffTotal + otherTotal + pattiTotal;
+      const balCash = totalAvailable - totalOutgo + othersTotal;
+
+      document.getElementById("advance-co").textContent = advanceCO;
+      document.getElementById("advance-spspl").textContent = advanceSPSpl;
+      document.getElementById("gross-wage").textContent = grossWage;
+      document.getElementById("patti-total").textContent = pattiTotal;
+      document.getElementById("others-total").textContent = othersTotal;
+
+      const ordBeedi = sumUsable(co) + sumUsable(sp);
+      const splBeedi = sumUsable(spl);
+      const ordB = toBundles(ordBeedi), splB = toBundles(splBeedi);
+      document.getElementById("ord-bundle-text").textContent = ordB.b + " bundle, " + ordB.r + " കെട്ട്";
+      document.getElementById("spl-bundle-text").textContent = splB.b + " bundle, " + splB.r + " കെട്ട്";
+
+      SECTIONS.forEach((sec) => {
+        const rows = entriesData[sec.key] || [];
+        const el = document.getElementById(`totals-${sec.key}`);
+        if (el) {
+          el.innerHTML = `<span>ബീഡി: <b>${sum(rows,'usable')||sum(rows,'beedi')}</b></span>
+            <span>കൂലി: <b>${sum(rows,'kooli')}</b></span>
+            <span>അടവ്: <b>${sum(rows,'advance')}</b></span>`;
+        }
+      });
+
+      const tally = document.getElementById("bal-cash-tally");
+      tally.textContent = "Bal Cash: " + balCash;
+      tally.classList.toggle("balanced", balCash >= 0);
+    }
+
+    function setStatus(msg) {
+      document.getElementById("status").textContent = msg;
+    }
+
+    function buildEntrySummaryRows(sec) {
+      return (entriesData[sec.key] || [])
+        .filter((r) => (Number(r.beedi) || 0) > 0 || (Number(r.advance) || 0) > 0 || (Number(r.patti) || 0) > 0 || (Number(r.others) || 0) !== 0)
+        .map((r) => `<tr><td>${r.number}</td><td class="num">${r.beedi || 0}</td><td class="num">${r.kooli || 0}</td><td class="num">${r.advance || 0}</td><td class="num">${r.balance || 0}</td><td class="num">${r.patti || 0}</td><td class="num">${r.others || 0}</td></tr>`)
+        .join("");
+    }
+
+    window.openReview = function () {
+      if (!currentDate) { setStatus("Date തിരഞ്ഞെടുക്കുക"); return; }
+      let html = `<p><b>${formatHeadingDate(currentDate)}</b></p>`;
+      SECTIONS.forEach((sec) => {
+        const rows = buildEntrySummaryRows(sec);
+        if (!rows) return;
+        html += `<div style="margin-top:8px;"><b>${sec.label}</b></div>
+          <table style="width:100%; margin-bottom:6px;">
+            <tr><th>നമ്പർ</th><th>ബീഡി</th><th>കൂലി</th><th>അടവ്</th><th>ബാക്കി</th><th>പറ്റ്</th><th>Others</th></tr>
+            ${rows}
+          </table>`;
+      });
+
+      const staffRows = (expensesData.StaffPayment || []).filter((it) => it.label || it.amount)
+        .map((it) => `<div class="field-row"><span>${it.label}</span><span class="num">${it.amount || 0}</span></div>`).join("");
+      const otherRows = (expensesData.OtherDaily || []).filter((it) => it.label || it.amount)
+        .map((it) => `<div class="field-row"><span>${it.label}</span><span class="num">${it.amount || 0}</span></div>`).join("");
+
+      html += `<div class="divider"></div>
+        <div class="field-row"><span>Cash in Hand</span><span class="num">${document.getElementById("cash-in-hand").value || 0}</span></div>
+        <div class="field-row"><span>അടവ് CO</span><span class="num">${document.getElementById("advance-co").textContent}</span></div>
+        <div class="field-row"><span>അടവ് SP+Spl</span><span class="num">${document.getElementById("advance-spspl").textContent}</span></div>
+        <div class="field-row"><span>കൂലി (gross)</span><span class="num">${document.getElementById("gross-wage").textContent}</span></div>
+        ${staffRows}
+        ${otherRows}
+        <div class="field-row"><span>പറ്റ്</span><span class="num">${document.getElementById("patti-total").textContent}</span></div>
+        <div class="field-row"><span>Others</span><span class="num">${document.getElementById("others-total").textContent}</span></div>
+        <div class="divider"></div>
+        <div class="tally ${document.getElementById("bal-cash-tally").classList.contains("balanced") ? "balanced" : ""}">${document.getElementById("bal-cash-tally").textContent}</div>`;
+
+      document.getElementById("review-body").innerHTML = html;
+      document.getElementById("review-overlay").style.display = "flex";
+    };
+
+    window.closeReview = function () {
+      document.getElementById("review-overlay").style.display = "none";
+    };
+
+    window.confirmSave = async function () {
+      setStatus("Saving...");
+      const allEntries = [];
+      SECTIONS.forEach((sec) => {
+        (entriesData[sec.key] || []).forEach((r) => {
+          allEntries.push({ section: sec.key, number: r.number, beedi: r.beedi, advance: r.advance, patti: r.patti, others: r.others });
+        });
+      });
+      try {
+        await fsSaveEntries(currentDate, currentDay, allEntries);
+        await fsSaveExpenses(currentDate, { StaffPayment: expensesData.StaffPayment, OtherDaily: expensesData.OtherDaily });
+        const cash = document.getElementById("cash-in-hand").value;
+        const res = await fsComputeAndSaveCashSummary(currentDate, currentDay, cash);
+        closeReview();
+        setStatus("Saved ✓  Bal Cash: " + res.balCash);
+        clearScreen();
+      } catch (err) {
+        alert("Error: " + err.message);
+      }
+    };
+
+    function startAutoSave() {
+      if (autoSaveTimer) clearInterval(autoSaveTimer);
+      autoSaveTimer = setInterval(autoSaveEntry, AUTO_SAVE_INTERVAL_MS);
+    }
+
+    async function autoSaveEntry() {
+      if (!currentDate) return;
+      const allEntries = [];
+      SECTIONS.forEach((sec) => {
+        (entriesData[sec.key] || []).forEach((r) => {
+          allEntries.push({ section: sec.key, number: r.number, beedi: r.beedi, advance: r.advance, patti: r.patti, others: r.others });
+        });
+      });
+      try {
+        await fsSaveEntries(currentDate, currentDay, allEntries);
+        await fsSaveExpenses(currentDate, { StaffPayment: expensesData.StaffPayment, OtherDaily: expensesData.OtherDaily });
+        const cash = document.getElementById("cash-in-hand").value;
+        await fsComputeAndSaveCashSummary(currentDate, currentDay, cash);
+        setStatus("Auto-saved ✓ " + new Date().toLocaleTimeString());
+      } catch (err) {
+        setStatus("Auto-save failed: " + err.message);
+      }
+    }
+
+    function clearScreen() {
+      if (autoSaveTimer) { clearInterval(autoSaveTimer); autoSaveTimer = null; }
+      currentDate = "";
+      entriesData = { CO: [], Spl: [], SP: [] };
+      expensesData = { StaffPayment: [], OtherDaily: [], NonDaily: [], Income: [] };
+      document.getElementById("sections").innerHTML = "";
+      document.getElementById("staff-list").innerHTML = "";
+      document.getElementById("other-list").innerHTML = "";
+      document.getElementById("cash-in-hand").value = "";
+      document.getElementById("advance-co").textContent = "0";
+      document.getElementById("advance-spspl").textContent = "0";
+      document.getElementById("gross-wage").textContent = "0";
+      document.getElementById("patti-total").textContent = "0";
+      document.getElementById("others-total").textContent = "0";
+      const tally = document.getElementById("bal-cash-tally");
+      tally.textContent = "Bal Cash: 0";
+      tally.classList.remove("balanced");
+    }
+
+    /* ================= Company Ledger tab ================= */
+    let ledgerData = null;
+    let ledgerDate = "";
+    let ledgerObOverride = "";
+
+    window.loadLedger = async function () {
+      ledgerDate = document.getElementById("ledger-date-input").value || todayStr();
+      document.getElementById("ledger-date-input").value = ledgerDate;
+      document.getElementById("ledger-date-display").textContent = formatHeadingDate(ledgerDate).split(" - ")[0];
+      document.getElementById("ledger-day-display").textContent = weekdayName(ledgerDate);
+      setLedgerStatus("Loading...");
+      ledgerData = await fsGetCompanyLedgerForDate(ledgerDate);
+      ledgerObOverride = ledgerData.obIsAuto ? "" : String(ledgerData.ob);
+      renderLedgerTable();
+      setLedgerStatus("");
+    };
+
+    function currentOb() {
+      if (!ledgerData) return 0;
+      return ledgerObOverride !== "" ? (Number(ledgerObOverride) || 0) : ledgerData.ob;
+    }
+
+    function ledgerFixedRow(label, amount, side) {
+      const incomeCell = side === "income" ? amount : "";
+      const expenseCell = side === "expense" ? amount : "";
+      return `<tr><td>${label}</td><td>${incomeCell}</td><td>${expenseCell}</td></tr>`;
+    }
+
+    function ledgerEditableRow(label, amount, side, tag, idx) {
+      const incomeCell = side === "income"
+        ? `<input class="amt" type="text" inputmode="numeric" value="${amount}" data-tag="${tag}" data-idx="${idx}" data-field="amount" oninput="onLedgerItemInput(this)">` : "";
+      const expenseCell = side === "expense"
+        ? `<input class="amt" type="text" inputmode="numeric" value="${amount}" data-tag="${tag}" data-idx="${idx}" data-field="amount" oninput="onLedgerItemInput(this)">` : "";
+      return `<tr>
+        <td><input class="desc" type="text" value="${label}" data-tag="${tag}" data-idx="${idx}" data-field="label" oninput="onLedgerItemInput(this)"></td>
+        <td>${incomeCell}</td><td>${expenseCell}</td>
+      </tr>`;
+    }
+
+    function renderLedgerTable() {
+      const body = document.getElementById("ledger-table-body");
+      if (!ledgerData) { body.innerHTML = ""; return; }
+
+      let rows = "";
+      if (ledgerData.advanceCO > 0) rows += ledgerFixedRow("അടവ് CO", ledgerData.advanceCO, "income");
+      if (ledgerData.advanceSPSpl > 0) rows += ledgerFixedRow("അടവ് SP+Spl", ledgerData.advanceSPSpl, "income");
+      (ledgerData.incomeItems || []).forEach((it, idx) => { rows += ledgerEditableRow(it.label || "", it.amount || "", "income", "income", idx); });
+      rows += `<tr class="ledger-add-row"><td colspan="3"><button class="add-row-btn" onclick="addLedgerItem('income')">+ വരവ് ചേർക്കുക</button></td></tr>`;
+
+      if (ledgerData.grossWage > 0) rows += ledgerFixedRow("കൂലി", ledgerData.grossWage, "expense");
+      (ledgerData.staffItems || []).filter((it) => Number(it.amount) > 0).forEach((it) => { rows += ledgerFixedRow(it.label, it.amount, "expense"); });
+      (ledgerData.otherItems || []).filter((it) => Number(it.amount) > 0).forEach((it) => { rows += ledgerFixedRow(it.label, it.amount, "expense"); });
+      (ledgerData.nonDailyItems || []).forEach((it, idx) => { rows += ledgerEditableRow(it.label || "", it.amount || "", "expense", "nonDaily", idx); });
+      rows += `<tr class="ledger-add-row"><td colspan="3"><button class="add-row-btn" onclick="addLedgerItem('nonDaily')">+ ചെലവ് ചേർക്കുക</button></td></tr>`;
+
+      if (ledgerData.pattiTotal > 0) rows += ledgerFixedRow("പറ്റ്", ledgerData.pattiTotal, "expense");
+      if (ledgerData.othersTotal > 0) rows += ledgerFixedRow("Others", ledgerData.othersTotal, "income");
+      if (ledgerData.othersTotal < 0) rows += ledgerFixedRow("Others", -ledgerData.othersTotal, "expense");
+
+      const incomeTotal = ledgerData.advanceCO + ledgerData.advanceSPSpl + sumAmt(ledgerData.incomeItems) + (ledgerData.othersTotal > 0 ? ledgerData.othersTotal : 0);
+      const expenseTotal = ledgerData.grossWage + ledgerData.staffTotal + ledgerData.otherTotal + sumAmt(ledgerData.nonDailyItems) + ledgerData.pattiTotal + (ledgerData.othersTotal < 0 ? -ledgerData.othersTotal : 0);
+      rows += `<tr class="ledger-total-row"><td></td><td id="lt-income-total">${incomeTotal}</td><td id="lt-expense-total">${expenseTotal}</td></tr>`;
+
+      const ob = currentOb();
+      const total = ob + incomeTotal;
+      const cb = total - expenseTotal;
+      rows += `<tr><td class="ledger-summary-cell">OB</td><td colspan="2"><input class="amt" type="text" inputmode="numeric" value="${ledgerObOverride}" placeholder="${ledgerData.obIsAuto ? ledgerData.ob + ' (auto)' : ''}" oninput="onObOverrideInput(this)" style="color:var(--rule); font-weight:bold;"></td></tr>`;
+      rows += `<tr><td>Total</td><td colspan="2" id="lt-total">${total}</td></tr>`;
+      rows += `<tr><td>Expense</td><td colspan="2" id="lt-expense-2">${expenseTotal}</td></tr>`;
+      rows += `<tr class="ledger-summary-row-cb"><td class="ledger-summary-cell">CB</td><td colspan="2" class="ledger-summary-cell" id="lt-cb">${cb}</td></tr>`;
+
+      body.innerHTML = rows;
+    }
+
+    function recalcLedgerDisplay() {
+      if (!ledgerData) return;
+      const t = ledgerTotals();
+      const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+      set("lt-income-total", t.incomeTotal);
+      set("lt-expense-total", t.expenseTotal);
+      set("lt-total", t.total);
+      set("lt-expense-2", t.expenseTotal);
+      set("lt-cb", t.cb);
+    }
+
+    function ledgerTotals() {
+      const incomeTotal = ledgerData.advanceCO + ledgerData.advanceSPSpl + sumAmt(ledgerData.incomeItems) + (ledgerData.othersTotal > 0 ? ledgerData.othersTotal : 0);
+      const expenseTotal = ledgerData.grossWage + ledgerData.staffTotal + ledgerData.otherTotal + sumAmt(ledgerData.nonDailyItems) + ledgerData.pattiTotal + (ledgerData.othersTotal < 0 ? -ledgerData.othersTotal : 0);
+      const ob = currentOb();
+      const total = ob + incomeTotal;
+      const cb = total - expenseTotal;
+      return { incomeTotal, expenseTotal, ob, total, cb };
+    }
+
+    window.onObOverrideInput = function (el) {
+      ledgerObOverride = el.value;
+      recalcLedgerDisplay();
+    };
+
+    window.addLedgerItem = function (tag) {
+      const key = tag === "income" ? "incomeItems" : "nonDailyItems";
+      ledgerData[key] = ledgerData[key] || [];
+      ledgerData[key].push({ label: "", amount: "" });
+      renderLedgerTable();
+    };
+
+    window.onLedgerItemInput = function (el) {
+      const tag = el.dataset.tag, idx = Number(el.dataset.idx), field = el.dataset.field;
+      const key = tag === "income" ? "incomeItems" : "nonDailyItems";
+      ledgerData[key][idx][field] = el.value;
+      if (field === "amount") recalcLedgerDisplay();
+    };
+
+    function setLedgerStatus(msg) { document.getElementById("ledger-status").textContent = msg; }
+
+    window.openLedgerReview = function () {
+      if (!ledgerDate) { setLedgerStatus("Date തിരഞ്ഞെടുക്കുക"); return; }
+      const t = ledgerTotals();
+      let rows = "";
+      if (ledgerData.advanceCO > 0) rows += ledgerFixedRow("അടവ് CO", ledgerData.advanceCO, "income");
+      if (ledgerData.advanceSPSpl > 0) rows += ledgerFixedRow("അടവ് SP+Spl", ledgerData.advanceSPSpl, "income");
+      (ledgerData.incomeItems || []).filter((it) => Number(it.amount) > 0).forEach((it) => { rows += ledgerFixedRow(it.label, it.amount, "income"); });
+      if (ledgerData.grossWage > 0) rows += ledgerFixedRow("കൂലി", ledgerData.grossWage, "expense");
+      (ledgerData.staffItems || []).filter((it) => Number(it.amount) > 0).forEach((it) => { rows += ledgerFixedRow(it.label, it.amount, "expense"); });
+      (ledgerData.otherItems || []).filter((it) => Number(it.amount) > 0).forEach((it) => { rows += ledgerFixedRow(it.label, it.amount, "expense"); });
+      (ledgerData.nonDailyItems || []).filter((it) => Number(it.amount) > 0).forEach((it) => { rows += ledgerFixedRow(it.label, it.amount, "expense"); });
+      if (ledgerData.pattiTotal > 0) rows += ledgerFixedRow("പറ്റ്", ledgerData.pattiTotal, "expense");
+      if (ledgerData.othersTotal > 0) rows += ledgerFixedRow("Others", ledgerData.othersTotal, "income");
+      if (ledgerData.othersTotal < 0) rows += ledgerFixedRow("Others", -ledgerData.othersTotal, "expense");
+      rows += `<tr class="ledger-total-row"><td></td><td>${t.incomeTotal}</td><td>${t.expenseTotal}</td></tr>`;
+      rows += `<tr><td class="ledger-summary-cell">OB</td><td colspan="2">${t.ob}</td></tr>`;
+      rows += `<tr><td>Total</td><td colspan="2">${t.total}</td></tr>`;
+      rows += `<tr><td>Expense</td><td colspan="2">${t.expenseTotal}</td></tr>`;
+      rows += `<tr class="ledger-summary-row-cb"><td class="ledger-summary-cell">CB</td><td colspan="2" class="ledger-summary-cell">${t.cb}</td></tr>`;
+
+      document.getElementById("ledger-review-body").innerHTML = `
+        <p><b>${formatHeadingDate(ledgerDate)}</b></p>
+        <div class="rows-scroll"><table class="ledger-table">${rows}</table></div>
+      `;
+      document.getElementById("ledger-review-overlay").style.display = "flex";
+    };
+
+    window.closeLedgerReview = function () {
+      document.getElementById("ledger-review-overlay").style.display = "none";
+    };
+
+    window.confirmSaveLedger = async function () {
+      setLedgerStatus("Saving...");
+      try {
+        const res = await fsSaveCompanyLedger(ledgerDate, ledgerObOverride, ledgerData.incomeItems, ledgerData.nonDailyItems);
+        closeLedgerReview();
+        setLedgerStatus("Saved — CB: " + res.closingBalance);
+        clearLedgerScreen();
+      } catch (err) {
+        alert("Error: " + err.message);
+      }
+    };
+
+    function clearLedgerScreen() {
+      ledgerData = null;
+      ledgerObOverride = "";
+      document.getElementById("ledger-table-body").innerHTML = "";
+      document.getElementById("ledger-date-display").textContent = "—";
+      document.getElementById("ledger-day-display").textContent = "—";
+    }
+  </script>
+</body>
+</html>
