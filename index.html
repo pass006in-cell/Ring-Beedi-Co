@@ -74,9 +74,9 @@
     #login-screen .action-btn { width: 100%; }
     #login-error { color: var(--rule); font-size: 12px; margin-top: 8px; }
     .stub-note { background: var(--card); border: 1px dashed #C8D3C9; border-radius: 4px; padding: 14px; color: var(--ink-soft); font-size: 13px; }
-    .report-section { background: var(--card); border: 1px solid #D3DFD3; border-radius: 4px; margin-bottom: 12px; padding: 10px 12px; }
+    .report-section { background: var(--card); border: 1px solid #D3DFD3; border-radius: 4px; margin-bottom: 12px; padding: 10px 12px; overflow-x: auto; }
     .report-section h2 { font-size: 14px; margin: 0 0 6px 0; border-bottom: 1px solid #D3DFD3; padding-bottom: 4px; }
-    .report-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .report-table { width: 100%; min-width: 460px; border-collapse: collapse; font-size: 12px; }
     .report-table th, .report-table td { padding: 3px 5px; text-align: right; border-bottom: 1px solid #E3E9E3; }
     .report-table th:first-child, .report-table td:first-child { text-align: left; }
     .report-table th { color: var(--ink-soft); font-size: 10.5px; }
@@ -882,10 +882,15 @@
     }
 
     async function fsGetPreviousClosingStock(item, dateStr) {
-      const q = query(collection(db, "stock"), where("item", "==", item), where("date", "<", dateStr), orderBy("date", "desc"), limit(1));
+      // Avoids needing a Firestore composite index (equality + range/orderBy on
+      // different fields) by fetching recent stock docs and filtering client-side.
+      const q = query(collection(db, "stock"), where("date", "<", dateStr), orderBy("date", "desc"), limit(20));
       const snap = await getDocs(q);
-      if (snap.empty) return 0;
-      return Number(snap.docs[0].data().closing) || 0;
+      for (const d of snap.docs) {
+        const data = d.data();
+        if (data.item === item) return Number(data.closing) || 0;
+      }
+      return 0;
     }
 
     async function fsGetStockForDate(dateStr) {
@@ -1268,10 +1273,14 @@
       document.getElementById("ledger-date-display").textContent = formatHeadingDate(ledgerDate).split(" - ")[0];
       document.getElementById("ledger-day-display").textContent = weekdayName(ledgerDate);
       setLedgerStatus("Loading...");
-      ledgerData = await fsGetCompanyLedgerForDate(ledgerDate);
-      ledgerObOverride = ledgerData.obIsAuto ? "" : String(ledgerData.ob);
-      renderLedgerTable();
-      setLedgerStatus("");
+      try {
+        ledgerData = await fsGetCompanyLedgerForDate(ledgerDate);
+        ledgerObOverride = ledgerData.obIsAuto ? "" : String(ledgerData.ob);
+        renderLedgerTable();
+        setLedgerStatus("");
+      } catch (err) {
+        setLedgerStatus("Error: " + err.message);
+      }
     };
 
     function currentOb() {
@@ -1473,7 +1482,7 @@
         const rows = (data.entries[sec.key] || []).filter((r) => (Number(r.beedi) || 0) > 0 || (Number(r.advance) || 0) > 0 || (Number(r.patti) || 0) > 0 || (Number(r.others) || 0) !== 0);
         if (!rows.length) return;
         html += `<div class="report-section"><h2>${sec.label}</h2>
-          <table class="report-table"><thead><tr><th>നമ്പർ</th><th>ബീഡി</th><th>കൂലി</th><th>X്</th><th>ബാക്കി</th><th>പറ്റ്</th><th>Others</th></tr></thead><tbody>
+          <table class="report-table"><thead><tr><th>നമ്പർ</th><th>ബീഡി</th><th>കൂലി</th><th>അടവ്</th><th>ബാക്കി</th><th>പറ്റ്</th><th>Others</th></tr></thead><tbody>
           ${rows.map((r) => `<tr><td>${r.number}</td><td>${r.beedi||0}</td><td>${r.kooli||0}</td><td>${r.advance||0}</td><td>${r.balance||0}</td><td>${r.patti||0}</td><td>${r.others||0}</td></tr>`).join("")}
           </tbody></table></div>`;
       });
@@ -1482,8 +1491,8 @@
       html += `<div class="report-section"><h2>Company Ledger</h2>
         <table class="report-table"><tbody>
           <tr><td>OB</td><td>${l.ob}</td></tr>
-          <tr><td>X് CO</td><td>${l.advanceCO}</td></tr>
-          <tr><td>X് SP+Spl</td><td>${l.advanceSPSpl}</td></tr>
+          <tr><td>അടവ് CO</td><td>${l.advanceCO}</td></tr>
+          <tr><td>അടവ് SP+Spl</td><td>${l.advanceSPSpl}</td></tr>
           ${(l.incomeItems||[]).filter(it=>it.amount>0).map(it=>`<tr><td>${it.label}</td><td>${it.amount}</td></tr>`).join("")}
           <tr><td><b>Total Income</b></td><td><b>${l.totalIncome}</b></td></tr>
           <tr><td>കൂലി</td><td>${l.grossWage}</td></tr>
@@ -1515,7 +1524,7 @@
         if (!rows.length) return;
         const t = data.sectionTotals[sec.key];
         html += `<div class="report-section"><h2>${sec.label}</h2>
-          <table class="report-table"><thead><tr><th>നമ്പർ</th><th>ബീഡി</th><th>കൂലി</th><th>X്</th><th>പറ്റ്</th><th>Others</th><th>ദിവസങ്ങൾ</th><th>Leave</th></tr></thead><tbody>
+          <table class="report-table"><thead><tr><th>നമ്പർ</th><th>ബീഡി</th><th>കൂലി</th><th>അടവ്</th><th>പറ്റ്</th><th>Others</th><th>ദിവസങ്ങൾ</th><th>Leave</th></tr></thead><tbody>
           ${rows.map((r) => `<tr><td>${r.number}</td><td>${r.beedi}</td><td>${r.kooli}</td><td>${r.advance}</td><td>${r.patti}</td><td>${r.others}</td><td>${r.days}</td><td>${r.leaveDays||0}</td></tr>`).join("")}
           <tr style="font-weight:bold;"><td>ആകെ</td><td>${t.beedi}</td><td>${t.kooli}</td><td>${t.advance}</td><td>${t.patti}</td><td>${t.others}</td><td></td><td></td></tr>
           </tbody></table></div>`;
@@ -1533,8 +1542,8 @@
       html += `<div class="report-section"><h2>Income (Period)</h2>
         <table class="report-table"><tbody>
           <tr><td>OB (period start)</td><td>${data.periodOB}</td></tr>
-          <tr><td>X് CO</td><td>${data.advanceCO}</td></tr>
-          <tr><td>X് SP+Spl</td><td>${data.advanceSPSpl}</td></tr>
+          <tr><td>അടവ് CO</td><td>${data.advanceCO}</td></tr>
+          <tr><td>അടവ് SP+Spl</td><td>${data.advanceSPSpl}</td></tr>
           ${incomeRows}
           <tr style="font-weight:bold;"><td>Total Income</td><td>${data.expenseTotals.Income + data.advanceCO + data.advanceSPSpl}</td></tr>
         </tbody></table></div>
@@ -1601,7 +1610,7 @@
 
       let html = `<h1>Workers പറ്റ് — Summary</h1>
         <div class="report-section"><h2>Summary</h2>
-        <table class="report-table"><thead><tr><th>Section</th><th>നമ്പർ</th><th>ആകെ പറ്റ്</th><th>ആകെ X്</th><th>കൊടുക്കാൻ</th><th>കിട്ടാൻ</th><th></th></tr></thead><tbody>
+        <table class="report-table"><thead><tr><th>Section</th><th>നമ്പർ</th><th>ആകെ പറ്റ്</th><th>ആകെ അടവ്</th><th>കൊടുക്കാൻ</th><th>കിട്ടാൻ</th><th></th></tr></thead><tbody>
         ${sectionBlocks}
         </tbody></table></div>
 
@@ -1622,9 +1631,13 @@
       stockDate = document.getElementById("stock-date-input").value || todayStr();
       document.getElementById("stock-date-input").value = stockDate;
       setStockStatus("Loading...");
-      stockData = await fsGetStockForDate(stockDate);
-      renderStockCards();
-      setStockStatus("");
+      try {
+        stockData = await fsGetStockForDate(stockDate);
+        renderStockCards();
+        setStockStatus("");
+      } catch (err) {
+        setStockStatus("Error: " + err.message);
+      }
     };
 
     function renderStockCards() {
