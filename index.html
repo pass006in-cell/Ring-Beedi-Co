@@ -274,6 +274,31 @@
       </div>
 
       <div class="card">
+        <div class="card-head" style="border-left-color: var(--accent-co);">Backup / Restore</div>
+        <div style="padding: 10px;">
+          <p style="font-size:12px; color:var(--ink-soft); margin-top:0;">
+            മൊത്തം data-യുടെ (Entries, Expenses, CompanyLedger, CashSummary, Stock, StockMovements, Workers) ഒരു
+            full backup Excel file ആയി download ചെയ്യാം, വേണമെങ്കിൽ അതിൽ നിന്ന് തന്നെ തിരിച്ച് restore ചെയ്യാം.
+          </p>
+          <button class="action-btn primary" onclick="downloadFullBackup()">⬇️ Backup ഡൗൺലോഡ് ചെയ്യുക</button>
+          <div class="status" id="backup-status"></div>
+
+          <div class="divider"></div>
+          <div class="expense-title">Backup file-ൽ നിന്ന് Restore ചെയ്യുക</div>
+          <p style="font-size:11.5px; color:var(--ink-soft);">
+            ⚠️ Restore ചെയ്യുന്നത് നിലവിലെ data overwrite ചെയ്യും (backup file-ൽ ഉള്ള dates/records-ന്).
+          </p>
+          <input type="file" id="restore-file-input" accept=".xlsx,.xls">
+          <div style="margin-top:8px;">
+            <button class="action-btn" onclick="previewRestore()">Preview</button>
+            <button class="action-btn primary" id="restore-confirm-btn" onclick="confirmRestore()" style="display:none; border-color:var(--rule); background:var(--rule);">Restore ചെയ്യുക</button>
+          </div>
+          <div id="restore-preview" style="font-size:12px; margin-top:10px;"></div>
+          <div class="status" id="restore-status"></div>
+        </div>
+      </div>
+
+      <div class="card">
         <div class="card-head" style="border-left-color: var(--rule);">Delete Data (⚠️ Careful)</div>
         <div style="padding: 10px;">
           <div class="expense-title">ഒരു ദിവസത്തെ മുഴുവൻ data delete ചെയ്യുക</div>
@@ -297,9 +322,11 @@
         <button class="day-btn" id="rbtn-daily" onclick="switchReport('daily')">Daily Report</button>
         <button class="day-btn" id="rbtn-period" onclick="switchReport('period')">Period Report</button>
         <button class="day-btn" id="rbtn-due" onclick="switchReport('due')">Workers പറ്റ്</button>
+        <button class="day-btn" id="rbtn-stockbook" onclick="switchReport('stockbook')">Stock Book</button>
       </div>
       <div id="report-controls" class="no-print"></div>
       <div style="text-align:right; margin: 6px 0;" class="no-print">
+        <button class="action-btn" onclick="exportReportToExcel()">📊 Excel ആയി export ചെയ്യുക</button>
         <button class="action-btn primary" onclick="window.print()">🖨 Print / Save as PDF</button>
       </div>
       <div id="report-body"></div>
@@ -696,6 +723,19 @@
       return { workers, totalReceivable, totalPayable };
     }
 
+    async function fsGetStockBookReport(item, startDate, endDate) {
+      // Single-field range+orderBy query (date only) — filters by item client-side
+      // to avoid needing a Firestore composite index.
+      const q = query(collection(db, "stock"), where("date", ">=", startDate), where("date", "<=", endDate), orderBy("date"));
+      const snap = await getDocs(q);
+      const rows = [];
+      snap.forEach((docSnap) => {
+        const d = docSnap.data();
+        if (d.item === item) rows.push(d);
+      });
+      return rows;
+    }
+
     /* ================= Workers (Settings) data layer ================= */
 
     async function fsGetWorkers() {
@@ -728,6 +768,96 @@
 
     async function fsRemoveWorker(section, number) {
       await deleteDoc(doc(db, "workers", section + "__" + number));
+    }
+
+    /* ================= Backup / Restore data-layer ================= */
+
+    async function fsExportAllData() {
+      const [entriesSnap, expensesSnap, ledgerSnap, cashSnap, stockSnap, movementsSnap, workersSnap] = await Promise.all([
+        getDocs(collection(db, "entries")),
+        getDocs(collection(db, "expenses")),
+        getDocs(collection(db, "companyLedger")),
+        getDocs(collection(db, "cashSummary")),
+        getDocs(collection(db, "stock")),
+        getDocs(collection(db, "stockMovements")),
+        getDocs(collection(db, "workers")),
+      ]);
+      const entries = entriesSnap.docs.map((d) => d.data());
+      const expenses = [];
+      expensesSnap.forEach((d) => {
+        const data = d.data();
+        (data.items || []).forEach((it) => expenses.push({ date: data.date, type: data.type, label: it.label, amount: it.amount }));
+      });
+      const companyLedger = ledgerSnap.docs.map((d) => d.data());
+      const cashSummary = cashSnap.docs.map((d) => d.data());
+      const stock = stockSnap.docs.map((d) => d.data());
+      const stockMovements = [];
+      movementsSnap.forEach((d) => {
+        const data = d.data();
+        (data.items || []).forEach((it) => stockMovements.push({ date: data.date, item: data.item, type: data.type, label: it.label, amount: it.amount }));
+      });
+      const workers = workersSnap.docs.map((d) => d.data());
+      return { entries, expenses, companyLedger, cashSummary, stock, stockMovements, workers };
+    }
+
+    async function fsRestoreEntries(rows) {
+      const writes = rows.filter((r) => r.date && r.section && r.number !== undefined && r.number !== "").map((r) => {
+        const beedi = Number(r.beedi) || 0;
+        const advance = Number(r.advance) || 0;
+        const w = wageFor(beedi);
+        const id = r.date + "__" + r.section + "__" + r.number;
+        return [doc(db, "entries", id), {
+          date: r.date, day: r.day || "", section: String(r.section), number: String(r.number),
+          beedi, kooli: w.wage || 0, advance, balance: (w.wage || 0) - advance,
+          patti: Number(r.patti) || 0, others: Number(r.others) || 0, usable: w.usable, carry: w.carry,
+        }];
+      });
+      return batchWriteAll(writes);
+    }
+
+    async function fsRestoreExpenses(rows) {
+      const grouped = {};
+      rows.forEach((r) => {
+        if (!r.date || !r.type) return;
+        const key = r.date + "__" + r.type;
+        if (!grouped[key]) grouped[key] = { date: r.date, type: r.type, items: [] };
+        grouped[key].items.push({ label: r.label || "", amount: Number(r.amount) || 0 });
+      });
+      const writes = Object.keys(grouped).map((key) => [doc(db, "expenses", key), grouped[key]]);
+      return batchWriteAll(writes);
+    }
+
+    async function fsRestoreLedger(rows) {
+      const writes = rows.filter((r) => r.date).map((r) => [doc(db, "companyLedger", r.date), r]);
+      return batchWriteAll(writes);
+    }
+
+    async function fsRestoreCashSummary(rows) {
+      const writes = rows.filter((r) => r.date).map((r) => [doc(db, "cashSummary", r.date), r]);
+      return batchWriteAll(writes);
+    }
+
+    async function fsRestoreStock(rows) {
+      const writes = rows.filter((r) => r.date && r.item).map((r) => [doc(db, "stock", r.date + "__" + r.item), r]);
+      return batchWriteAll(writes);
+    }
+
+    async function fsRestoreStockMovements(rows) {
+      const grouped = {};
+      rows.forEach((r) => {
+        if (!r.date || !r.item || !r.type) return;
+        const key = r.date + "__" + r.item + "__" + r.type;
+        if (!grouped[key]) grouped[key] = { date: r.date, item: r.item, type: r.type, items: [] };
+        grouped[key].items.push({ label: r.label || "", amount: Number(r.amount) || 0 });
+      });
+      const writes = Object.keys(grouped).map((key) => [doc(db, "stockMovements", key), grouped[key]]);
+      return batchWriteAll(writes);
+    }
+
+    async function fsRestoreWorkers(rows) {
+      const writes = rows.filter((r) => r.section && r.number !== undefined && r.number !== "")
+        .map((r) => [doc(db, "workers", r.section + "__" + r.number), { section: String(r.section), number: String(r.number) }]);
+      return batchWriteAll(writes);
     }
 
     /* ================= Delete data-layer ================= */
@@ -1434,12 +1564,96 @@
 
     /* ================= Reports tab ================= */
     let currentReport = "daily";
+    let lastReportData = null;
 
     window.switchReport = function (kind) {
       currentReport = kind;
-      ["daily", "period", "due"].forEach((k) => document.getElementById("rbtn-" + k).classList.toggle("active", k === kind));
+      ["daily", "period", "due", "stockbook"].forEach((k) => document.getElementById("rbtn-" + k).classList.toggle("active", k === kind));
       renderReportControls();
     };
+
+    let stockBookItem = "ORD";
+
+    window.exportReportToExcel = function () {
+      if (!lastReportData) { alert("ആദ്യം ഒരു report Load ചെയ്യുക"); return; }
+      const wb = XLSX.utils.book_new();
+      if (currentReport === "daily") buildDailyReportWorkbook(wb, lastReportData);
+      else if (currentReport === "period") buildPeriodReportWorkbook(wb, lastReportData);
+      else if (currentReport === "due") buildWorkerDueWorkbook(wb, lastReportData);
+      else if (currentReport === "stockbook") buildStockBookWorkbook(wb, lastReportData);
+      const filenameBit = currentReport + "-" + todayStr();
+      XLSX.writeFile(wb, "RingBeedi-" + filenameBit + ".xlsx");
+    };
+
+    function addSheetFromAOA(wb, name, aoa) {
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      XLSX.utils.book_append_sheet(wb, ws, name.slice(0, 31));
+    }
+
+    function buildDailyReportWorkbook(wb, data) {
+      SECTIONS.forEach((sec) => {
+        const rows = data.entries[sec.key] || [];
+        const aoa = [["നമ്പർ", "ബീഡി", "കൂലി", "അടവ്", "ബാക്കി", "പറ്റ്", "Others"]];
+        rows.forEach((r) => aoa.push([r.number, r.beedi || 0, r.kooli || 0, r.advance || 0, r.balance || 0, r.patti || 0, r.others || 0]));
+        addSheetFromAOA(wb, sec.label, aoa);
+      });
+      const l = data.ledger;
+      const led = [["Item", "Amount"], ["Date", data.date], ["OB", l.ob], ["അടവ് CO", l.advanceCO], ["അടവ് SP+Spl", l.advanceSPSpl]];
+      (l.incomeItems || []).forEach((it) => led.push([it.label, it.amount]));
+      led.push(["Total Income", l.totalIncome]);
+      led.push(["കൂലി", l.grossWage]);
+      (l.staffItems || []).forEach((it) => led.push([it.label, it.amount]));
+      (l.otherItems || []).forEach((it) => led.push([it.label, it.amount]));
+      (l.nonDailyItems || []).forEach((it) => led.push([it.label, it.amount]));
+      led.push(["Total Expense", l.totalExpense]);
+      led.push(["CB", l.closingBalance]);
+      addSheetFromAOA(wb, "CompanyLedger", led);
+    }
+
+    function buildPeriodReportWorkbook(wb, data) {
+      SECTIONS.forEach((sec) => {
+        const rows = data.workerRows[sec.key] || [];
+        const aoa = [["നമ്പർ", "ബീഡി", "കൂലി", "അടവ്", "പറ്റ്", "Others", "ദിവസങ്ങൾ", "Leave"]];
+        rows.forEach((r) => aoa.push([r.number, r.beedi, r.kooli, r.advance, r.patti, r.others, r.days, r.leaveDays || 0]));
+        addSheetFromAOA(wb, sec.label, aoa);
+      });
+      const summary = [["Item", "Amount"], ["Period", data.startDate + " to " + data.endDate], ["OB", data.periodOB], ["അടവ് CO", data.advanceCO], ["അടവ് SP+Spl", data.advanceSPSpl]];
+      data.incomeList.forEach((it) => summary.push([it.date + " — " + it.label, it.amount]));
+      summary.push(["Total Income", data.expenseTotals.Income + data.advanceCO + data.advanceSPSpl]);
+      summary.push(["കൂലി (ആകെ)", data.grossWage]);
+      Object.keys(data.staffByLabel).forEach((k) => summary.push([k, data.staffByLabel[k]]));
+      Object.keys(data.otherByLabel).forEach((k) => summary.push([k, data.otherByLabel[k]]));
+      data.nonDailyList.forEach((it) => summary.push([it.date + " — " + it.label, it.amount]));
+      summary.push(["പറ്റ് (ആകെ)", data.pattiTotal]);
+      summary.push(["Others (ആകെ)", data.othersTotal]);
+      summary.push(["CB (period end)", data.periodCB]);
+      addSheetFromAOA(wb, "Summary", summary);
+    }
+
+    function buildWorkerDueWorkbook(wb, data) {
+      const summary = [["Section", "നമ്പർ", "ആകെ പറ്റ്", "ആകെ അടവ്", "കൊടുക്കാൻ", "കിട്ടാൻ"]];
+      data.workers.forEach((w) => {
+        const payable = w.net < 0 ? -w.net : 0;
+        const receivable = w.net > 0 ? w.net : 0;
+        summary.push([w.section, w.number, w.pattiTotal, w.advanceTotal, payable, receivable]);
+      });
+      summary.push([]);
+      summary.push(["കമ്പനി കൊടുക്കാൻ ഉള്ളത്", data.totalPayable]);
+      summary.push(["കമ്പനിക്ക് കിട്ടാൻ ഉള്ളത്", data.totalReceivable]);
+      addSheetFromAOA(wb, "Summary", summary);
+
+      const history = [["Section", "നമ്പർ", "Date", "പറ്റ്", "അടവ്"]];
+      data.workers.forEach((w) => {
+        w.history.forEach((h) => history.push([w.section, w.number, h.date, h.patti || 0, h.advance || 0]));
+      });
+      addSheetFromAOA(wb, "History", history);
+    }
+
+    function buildStockBookWorkbook(wb, data) {
+      const aoa = [["Date", "Day", "Opening", "Production", "Sale", "Short", "Closing"]];
+      data.rows.forEach((r) => aoa.push([r.date, weekdayName(r.date), r.opening, r.production, r.sale, r.short, r.closing]));
+      addSheetFromAOA(wb, data.item + " Stock Book", aoa);
+    }
 
     function renderReportControls() {
       const c = document.getElementById("report-controls");
@@ -1460,6 +1674,20 @@
           </div>`;
         document.getElementById("report-start-date").value = todayStr();
         document.getElementById("report-end-date").value = todayStr();
+      } else if (currentReport === "stockbook") {
+        c.innerHTML = `
+          <div class="day-picker">
+            <button class="day-btn ${stockBookItem === 'ORD' ? 'active' : ''}" id="sb-item-ord" onclick="setStockBookItem('ORD')">ORD</button>
+            <button class="day-btn ${stockBookItem === 'SPL' ? 'active' : ''}" id="sb-item-spl" onclick="setStockBookItem('SPL')">SPL</button>
+          </div>
+          <div class="day-picker">
+            <input type="date" id="report-stock-start">
+            <span>to</span>
+            <input type="date" id="report-stock-end">
+            <button class="action-btn" onclick="loadStockBookReport()">Load</button>
+          </div>`;
+        document.getElementById("report-stock-start").value = todayStr();
+        document.getElementById("report-stock-end").value = todayStr();
       } else {
         c.innerHTML = `<div class="day-picker"><button class="action-btn" onclick="loadWorkerDueReport()">Load</button></div>`;
       }
@@ -1471,6 +1699,7 @@
       if (!date) return;
       document.getElementById("report-body").innerHTML = "<p>Loading...</p>";
       const data = await fsGetDailyReport(date);
+      lastReportData = data;
       renderDailyReport(data);
     };
 
@@ -1512,6 +1741,7 @@
       if (!start || !end) return;
       document.getElementById("report-body").innerHTML = "<p>Loading...</p>";
       const data = await fsGetPeriodReport(start, end);
+      lastReportData = data;
       renderPeriodReport(data);
     };
 
@@ -1567,9 +1797,71 @@
       body.innerHTML = html;
     }
 
+    window.setStockBookItem = function (item) {
+      stockBookItem = item;
+      document.getElementById("sb-item-ord").classList.toggle("active", item === "ORD");
+      document.getElementById("sb-item-spl").classList.toggle("active", item === "SPL");
+    };
+
+    window.loadStockBookReport = async function () {
+      const start = document.getElementById("report-stock-start").value;
+      const end = document.getElementById("report-stock-end").value;
+      if (!start || !end) return;
+      document.getElementById("report-body").innerHTML = "<p>Loading...</p>";
+      try {
+        const rows = await fsGetStockBookReport(stockBookItem, start, end);
+        lastReportData = { item: stockBookItem, start, end, rows };
+        renderStockBookReport(stockBookItem, start, end, rows);
+      } catch (err) {
+        document.getElementById("report-body").innerHTML = "<p>Error: " + err.message + "</p>";
+      }
+    };
+
+    function renderStockBookReport(item, start, end, rows) {
+      const body = document.getElementById("report-body");
+      let html = `<h1>${item} Stock Book — ${formatHeadingDate(start).split(" - ")[0]} → ${formatHeadingDate(end).split(" - ")[0]}</h1>`;
+
+      const dayRows = rows.map((r) => {
+        const opB = toBundles(r.opening), prB = toBundles(r.production), saB = toBundles(r.sale), shB = toBundles(r.short), clB = toBundles(r.closing);
+        return `<tr>
+          <td>${r.date} (${weekdayName(r.date)})</td>
+          <td>${opB.b}b ${opB.r}k</td>
+          <td>${prB.b}b ${prB.r}k</td>
+          <td>${saB.b}b ${saB.r}k</td>
+          <td>${shB.b}b ${shB.r}k</td>
+          <td>${clB.b}b ${clB.r}k</td>
+        </tr>`;
+      }).join("");
+
+      html += `<div class="report-section"><h2>ദിവസ-തിരിച്ച്</h2>
+        <table class="report-table"><thead><tr><th>Date (Day)</th><th>Opening</th><th>Production</th><th>Sale</th><th>Short</th><th>Closing</th></tr></thead><tbody>
+        ${dayRows || '<tr><td colspan="6">ഈ period-ൽ Stock save ചെയ്ത data ഒന്നും ഇല്ല.</td></tr>'}
+        </tbody></table></div>`;
+
+      if (rows.length) {
+        const first = rows[0], last = rows[rows.length - 1];
+        const totalProduction = rows.reduce((s, r) => s + (Number(r.production) || 0), 0);
+        const totalSale = rows.reduce((s, r) => s + (Number(r.sale) || 0), 0);
+        const totalShort = rows.reduce((s, r) => s + (Number(r.short) || 0), 0);
+        const opB = toBundles(first.opening), clB = toBundles(last.closing);
+        const prB = toBundles(totalProduction), saB = toBundles(totalSale), shB = toBundles(totalShort);
+        html += `<div class="report-section"><h2>Period Summary</h2>
+          <table class="report-table"><tbody>
+            <tr><td>Opening (period start)</td><td>${opB.b} bundle, ${opB.r} കെട്ട്</td></tr>
+            <tr><td>Production (ആകെ)</td><td>${prB.b} bundle, ${prB.r} കെട്ട്</td></tr>
+            <tr><td>Sale (ആകെ)</td><td>${saB.b} bundle, ${saB.r} കെട്ട്</td></tr>
+            <tr><td>Short (ആകെ)</td><td>${shB.b} bundle, ${shB.r} കെട്ട്</td></tr>
+            <tr style="font-weight:bold;"><td>Closing (period end)</td><td>${clB.b} bundle, ${clB.r} കെട്ട്</td></tr>
+          </tbody></table></div>`;
+      }
+
+      body.innerHTML = html;
+    }
+
     window.loadWorkerDueReport = async function () {
       document.getElementById("report-body").innerHTML = "<p>Loading...</p>";
       const data = await fsGetWorkerDueReport();
+      lastReportData = data;
       renderWorkerDueReport(data);
     };
 
@@ -1927,6 +2219,106 @@
     };
 
     /* ================= Settings tab: delete ================= */
+
+    /* ================= Settings tab: backup/restore ================= */
+
+    let restoreData = null;
+
+    window.downloadFullBackup = async function () {
+      const statusEl = document.getElementById("backup-status");
+      statusEl.textContent = "Preparing backup...";
+      try {
+        const data = await fsExportAllData();
+        const wb = XLSX.utils.book_new();
+        const addJson = (name, rows) => {
+          const ws = rows.length ? XLSX.utils.json_to_sheet(rows) : XLSX.utils.aoa_to_sheet([["(no data)"]]);
+          XLSX.utils.book_append_sheet(wb, ws, name);
+        };
+        addJson("Entries", data.entries);
+        addJson("Expenses", data.expenses);
+        addJson("CompanyLedger", data.companyLedger);
+        addJson("CashSummary", data.cashSummary);
+        addJson("Stock", data.stock);
+        addJson("StockMovements", data.stockMovements);
+        addJson("Workers", data.workers);
+        XLSX.writeFile(wb, "RingBeedi-FullBackup-" + todayStr() + ".xlsx");
+        statusEl.textContent = "✓ Backup ഡൗൺലോഡ് ആയി.";
+      } catch (err) {
+        statusEl.textContent = "Error: " + err.message;
+      }
+    };
+
+    window.previewRestore = function () {
+      const fileInput = document.getElementById("restore-file-input");
+      const file = fileInput.files[0];
+      const statusEl = document.getElementById("restore-status");
+      const previewEl = document.getElementById("restore-preview");
+      if (!file) { statusEl.textContent = "File select ചെയ്യുക"; return; }
+      statusEl.textContent = "Reading...";
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const wb = XLSX.read(e.target.result, { type: "binary" });
+          const get = (names) => {
+            const sheet = findSheet(wb, names);
+            return sheet ? XLSX.utils.sheet_to_json(sheet, { defval: "", raw: false }) : [];
+          };
+          restoreData = {
+            entries: get(["Entries"]), expenses: get(["Expenses"]),
+            companyLedger: get(["CompanyLedger", "Company Ledger"]), cashSummary: get(["CashSummary", "Cash Summary"]),
+            stock: get(["Stock"]), stockMovements: get(["StockMovements", "Stock Movements"]), workers: get(["Workers"]),
+          };
+          const total = Object.values(restoreData).reduce((s, arr) => s + arr.length, 0);
+          if (!total) {
+            previewEl.innerHTML = "<p>Valid data ഒന്നും കണ്ടില്ല. ഇത് ഈ app-ന്റെ backup file തന്നെയാണോ എന്ന് നോക്കുക.</p>";
+            document.getElementById("restore-confirm-btn").style.display = "none";
+            statusEl.textContent = "";
+            return;
+          }
+          previewEl.innerHTML = `
+            <p>Backup file-ൽ കണ്ടെത്തിയത്:</p>
+            <ul style="margin:4px 0; padding-left:18px;">
+              <li>Entries: <b>${restoreData.entries.length}</b></li>
+              <li>Expenses: <b>${restoreData.expenses.length}</b></li>
+              <li>CompanyLedger: <b>${restoreData.companyLedger.length}</b></li>
+              <li>CashSummary: <b>${restoreData.cashSummary.length}</b></li>
+              <li>Stock: <b>${restoreData.stock.length}</b></li>
+              <li>StockMovements: <b>${restoreData.stockMovements.length}</b></li>
+              <li>Workers: <b>${restoreData.workers.length}</b></li>
+            </ul>`;
+          document.getElementById("restore-confirm-btn").style.display = "";
+          statusEl.textContent = "";
+        } catch (err) {
+          statusEl.textContent = "Error: " + err.message;
+        }
+      };
+      reader.readAsBinaryString(file);
+    };
+
+    window.confirmRestore = async function () {
+      const statusEl = document.getElementById("restore-status");
+      if (!restoreData) return;
+      if (!confirm("Restore ചെയ്യണോ? Backup file-ൽ ഉള്ള dates-ന്റെ നിലവിലെ data overwrite ആകും. ഇത് തിരിച്ചെടുക്കാൻ പറ്റില്ല.")) return;
+      statusEl.textContent = "Restoring...";
+      try {
+        await Promise.all([
+          restoreData.entries.length ? fsRestoreEntries(restoreData.entries) : 0,
+          restoreData.expenses.length ? fsRestoreExpenses(restoreData.expenses) : 0,
+          restoreData.companyLedger.length ? fsRestoreLedger(restoreData.companyLedger) : 0,
+          restoreData.cashSummary.length ? fsRestoreCashSummary(restoreData.cashSummary) : 0,
+          restoreData.stock.length ? fsRestoreStock(restoreData.stock) : 0,
+          restoreData.stockMovements.length ? fsRestoreStockMovements(restoreData.stockMovements) : 0,
+          restoreData.workers.length ? fsRestoreWorkers(restoreData.workers) : 0,
+        ]);
+        statusEl.textContent = "✓ Restore complete.";
+        document.getElementById("restore-confirm-btn").style.display = "none";
+        document.getElementById("restore-preview").innerHTML = "";
+        restoreData = null;
+      } catch (err) {
+        statusEl.textContent = "Error: " + err.message;
+      }
+    };
 
     window.deleteSingleDay = async function () {
       const date = document.getElementById("delete-single-date").value;
