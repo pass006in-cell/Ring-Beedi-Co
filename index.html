@@ -323,6 +323,7 @@
         <button class="day-btn" id="rbtn-period" onclick="switchReport('period')">Period Report</button>
         <button class="day-btn" id="rbtn-due" onclick="switchReport('due')">Workers പറ്റ്</button>
         <button class="day-btn" id="rbtn-stockbook" onclick="switchReport('stockbook')">Stock Book</button>
+        <button class="day-btn" id="rbtn-full" onclick="switchReport('full')">Worker Full Report</button>
       </div>
       <div id="report-controls" class="no-print"></div>
       <div style="text-align:right; margin: 6px 0;" class="no-print">
@@ -693,6 +694,10 @@
       };
     }
 
+    function identityPool(section) {
+      return section === "CO" ? "CO" : "SP"; // SP and Spl are the same worker pool (item can vary by day)
+    }
+
     async function fsGetWorkerDueReport() {
       const snap = await getDocs(collection(db, "entries"));
       const byWorker = {};
@@ -701,9 +706,10 @@
         const patti = Number(r.patti) || 0;
         const advance = Number(r.advance) || 0;
         if (patti === 0 && advance === 0) return;
-        const key = r.section + "|" + r.number;
-        if (!byWorker[key]) byWorker[key] = { section: r.section, number: String(r.number), history: [], pattiTotal: 0, advanceTotal: 0 };
-        byWorker[key].history.push({ date: r.date, patti, advance });
+        const pool = identityPool(r.section);
+        const key = pool + "|" + r.number;
+        if (!byWorker[key]) byWorker[key] = { section: pool, number: String(r.number), history: [], pattiTotal: 0, advanceTotal: 0 };
+        byWorker[key].history.push({ date: r.date, section: r.section, patti, advance });
         byWorker[key].pattiTotal += patti;
         byWorker[key].advanceTotal += advance;
       });
@@ -723,6 +729,54 @@
       return { workers, totalReceivable, totalPayable };
     }
 
+    async function fsGetWorkerFullReport() {
+      const snap = await getDocs(collection(db, "entries"));
+      const byWorker = {};
+      snap.forEach((docSnap) => {
+        const r = docSnap.data();
+        const beedi = Number(r.beedi) || 0, kooli = Number(r.kooli) || 0, advance = Number(r.advance) || 0;
+        const patti = Number(r.patti) || 0, others = Number(r.others) || 0, balance = Number(r.balance) || 0;
+        if (beedi === 0 && advance === 0 && patti === 0 && others === 0) return;
+        const pool = identityPool(r.section);
+        const item = r.section === "Spl" ? "SPL" : "ORD";
+        const key = pool + "|" + r.number;
+        if (!byWorker[key]) {
+          byWorker[key] = {
+            section: pool, number: String(r.number),
+            items: {
+              ORD: { beedi: 0, kooli: 0, advance: 0, patti: 0, others: 0, days: 0 },
+              SPL: { beedi: 0, kooli: 0, advance: 0, patti: 0, others: 0, days: 0 },
+            },
+            history: [],
+          };
+        }
+        const w = byWorker[key];
+        w.items[item].beedi += beedi; w.items[item].kooli += kooli; w.items[item].advance += advance;
+        w.items[item].patti += patti; w.items[item].others += others;
+        if (beedi > 0 || advance > 0) w.items[item].days += 1;
+        w.history.push({ date: r.date, section: r.section, item, beedi, kooli, advance, balance, patti, others });
+      });
+      const workers = Object.keys(byWorker).map((key) => {
+        const w = byWorker[key];
+        w.history.sort((a, b) => (a.date < b.date ? -1 : 1));
+        w.grand = {
+          beedi: w.items.ORD.beedi + w.items.SPL.beedi,
+          kooli: w.items.ORD.kooli + w.items.SPL.kooli,
+          advance: w.items.ORD.advance + w.items.SPL.advance,
+          patti: w.items.ORD.patti + w.items.SPL.patti,
+          others: w.items.ORD.others + w.items.SPL.others,
+          days: w.items.ORD.days + w.items.SPL.days,
+        };
+        return w;
+      }).sort((a, b) => {
+        if (a.section !== b.section) return a.section.localeCompare(b.section);
+        const na = Number(a.number), nb = Number(b.number);
+        if (!isNaN(na) && !isNaN(nb)) return na - nb;
+        return String(a.number).localeCompare(String(b.number));
+      });
+      return { workers };
+    }
+
     async function fsGetStockBookReport(item, startDate, endDate) {
       // Single-field range+orderBy query (date only) — filters by item client-side
       // to avoid needing a Firestore composite index.
@@ -740,12 +794,35 @@
 
     async function fsGetWorkers() {
       const snap = await getDocs(collection(db, "workers"));
-      const out = { CO: [], Spl: [], SP: [] };
+      const bySection = { CO: [], Spl: [], SP: [] };
       snap.forEach((docSnap) => {
         const d = docSnap.data();
-        if (out[d.section]) out[d.section].push(String(d.number));
+        if (bySection[d.section]) bySection[d.section].push(d);
       });
-      Object.keys(out).forEach((k) => (out[k] = sortWorkerIds(out[k])));
+
+      // One-time migration: assign an 'order' field to any doc that doesn't have one yet
+      // (numeric-first, matching the old default sort), so existing data keeps its look.
+      const migrations = [];
+      Object.keys(bySection).forEach((sec) => {
+        const list = bySection[sec];
+        if (list.some((d) => d.order === undefined)) {
+          const sortedNums = sortWorkerIds(list.map((d) => String(d.number)));
+          sortedNums.forEach((num, idx) => {
+            const item = list.find((d) => String(d.number) === num);
+            if (item.order === undefined) {
+              item.order = idx;
+              migrations.push(setDoc(doc(db, "workers", sec + "__" + num), { section: sec, number: num, order: idx }));
+            }
+          });
+        }
+      });
+      if (migrations.length) await Promise.all(migrations);
+
+      const out = { CO: [], Spl: [], SP: [] };
+      Object.keys(bySection).forEach((sec) => {
+        bySection[sec].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        out[sec] = bySection[sec].map((d) => String(d.number));
+      });
       return out;
     }
 
@@ -754,8 +831,8 @@
       if (!snap.empty) return false;
       const batch = writeBatch(db);
       [["CO", CO_NUMBERS], ["Spl", SPL_NUMBERS], ["SP", SP_NUMBERS]].forEach(([section, nums]) => {
-        nums.forEach((num) => {
-          batch.set(doc(db, "workers", section + "__" + num), { section, number: String(num) });
+        nums.forEach((num, idx) => {
+          batch.set(doc(db, "workers", section + "__" + num), { section, number: String(num), order: idx });
         });
       });
       await batch.commit();
@@ -763,11 +840,30 @@
     }
 
     async function fsAddWorker(section, number) {
-      await setDoc(doc(db, "workers", section + "__" + number), { section, number: String(number) });
+      const snap = await getDocs(query(collection(db, "workers"), where("section", "==", section)));
+      let maxOrder = -1;
+      snap.forEach((d) => { const o = d.data().order; if (o !== undefined && o > maxOrder) maxOrder = o; });
+      await setDoc(doc(db, "workers", section + "__" + number), { section, number: String(number), order: maxOrder + 1 });
     }
 
     async function fsRemoveWorker(section, number) {
       await deleteDoc(doc(db, "workers", section + "__" + number));
+    }
+
+    async function fsMoveWorker(section, orderedNumbers, number, direction) {
+      const idx = orderedNumbers.indexOf(number);
+      const swapIdx = idx + direction;
+      if (idx === -1 || swapIdx < 0 || swapIdx >= orderedNumbers.length) return;
+      const otherNumber = orderedNumbers[swapIdx];
+      const [d1, d2] = await Promise.all([
+        getDoc(doc(db, "workers", section + "__" + number)),
+        getDoc(doc(db, "workers", section + "__" + otherNumber)),
+      ]);
+      const data1 = d1.data(), data2 = d2.data();
+      await Promise.all([
+        setDoc(doc(db, "workers", section + "__" + number), { ...data1, order: data2.order ?? 0 }),
+        setDoc(doc(db, "workers", section + "__" + otherNumber), { ...data2, order: data1.order ?? 0 }),
+      ]);
     }
 
     /* ================= Backup / Restore data-layer ================= */
@@ -1568,7 +1664,7 @@
 
     window.switchReport = function (kind) {
       currentReport = kind;
-      ["daily", "period", "due", "stockbook"].forEach((k) => document.getElementById("rbtn-" + k).classList.toggle("active", k === kind));
+      ["daily", "period", "due", "stockbook", "full"].forEach((k) => document.getElementById("rbtn-" + k).classList.toggle("active", k === kind));
       renderReportControls();
     };
 
@@ -1581,6 +1677,7 @@
       else if (currentReport === "period") buildPeriodReportWorkbook(wb, lastReportData);
       else if (currentReport === "due") buildWorkerDueWorkbook(wb, lastReportData);
       else if (currentReport === "stockbook") buildStockBookWorkbook(wb, lastReportData);
+      else if (currentReport === "full") buildWorkerFullWorkbook(wb, lastReportData);
       const filenameBit = currentReport + "-" + todayStr();
       XLSX.writeFile(wb, "RingBeedi-" + filenameBit + ".xlsx");
     };
@@ -1642,9 +1739,9 @@
       summary.push(["കമ്പനിക്ക് കിട്ടാൻ ഉള്ളത്", data.totalReceivable]);
       addSheetFromAOA(wb, "Summary", summary);
 
-      const history = [["Section", "നമ്പർ", "Date", "പറ്റ്", "അടവ്"]];
+      const history = [["Section", "നമ്പർ", "Date", "Item (Section that day)", "പറ്റ്", "അടവ്"]];
       data.workers.forEach((w) => {
-        w.history.forEach((h) => history.push([w.section, w.number, h.date, h.patti || 0, h.advance || 0]));
+        w.history.forEach((h) => history.push([w.section, w.number, h.date, h.section, h.patti || 0, h.advance || 0]));
       });
       addSheetFromAOA(wb, "History", history);
     }
@@ -1653,6 +1750,31 @@
       const aoa = [["Date", "Day", "Opening", "Production", "Sale", "Short", "Closing"]];
       data.rows.forEach((r) => aoa.push([r.date, weekdayName(r.date), r.opening, r.production, r.sale, r.short, r.closing]));
       addSheetFromAOA(wb, data.item + " Stock Book", aoa);
+    }
+
+    function buildWorkerFullWorkbook(wb, data) {
+      const summary = [["Section", "നമ്പർ", "ബീഡി", "കൂലി", "അടവ്", "പറ്റ്", "Others", "ദിവസങ്ങൾ"]];
+      data.workers.forEach((w) => {
+        summary.push([w.section, w.number, w.grand.beedi, w.grand.kooli, w.grand.advance, w.grand.patti, w.grand.others, w.grand.days]);
+      });
+      addSheetFromAOA(wb, "Summary", summary);
+
+      const itemWise = [["Section", "നമ്പർ", "Item", "ബീഡി", "കൂലി", "അടവ്", "പറ്റ്", "Others", "ദിവസങ്ങൾ"]];
+      data.workers.forEach((w) => {
+        ["ORD", "SPL"].forEach((item) => {
+          const it = w.items[item];
+          if (it.beedi || it.kooli || it.advance || it.patti || it.others) {
+            itemWise.push([w.section, w.number, item, it.beedi, it.kooli, it.advance, it.patti, it.others, it.days]);
+          }
+        });
+      });
+      addSheetFromAOA(wb, "Item-wise", itemWise);
+
+      const history = [["Section", "നമ്പർ", "Date", "Item", "ബീഡി", "കൂലി", "അടവ്", "ബാക്കി", "പറ്റ്", "Others"]];
+      data.workers.forEach((w) => {
+        w.history.forEach((h) => history.push([w.section, w.number, h.date, h.item, h.beedi, h.kooli, h.advance, h.balance, h.patti, h.others]));
+      });
+      addSheetFromAOA(wb, "Full History", history);
     }
 
     function renderReportControls() {
@@ -1688,6 +1810,8 @@
           </div>`;
         document.getElementById("report-stock-start").value = todayStr();
         document.getElementById("report-stock-end").value = todayStr();
+      } else if (currentReport === "full") {
+        c.innerHTML = `<div class="day-picker"><button class="action-btn" onclick="loadWorkerFullReport()">Load</button></div>`;
       } else {
         c.innerHTML = `<div class="day-picker"><button class="action-btn" onclick="loadWorkerDueReport()">Load</button></div>`;
       }
@@ -1865,6 +1989,52 @@
       renderWorkerDueReport(data);
     };
 
+    window.loadWorkerFullReport = async function () {
+      document.getElementById("report-body").innerHTML = "<p>Loading...</p>";
+      const data = await fsGetWorkerFullReport();
+      lastReportData = data;
+      renderWorkerFullReport(data);
+    };
+
+    function renderWorkerFullReport(data) {
+      const body = document.getElementById("report-body");
+      const sections = ["CO", "SP"];
+      let idx = 0;
+      let blocks = "";
+
+      sections.forEach((sec) => {
+        const rows = data.workers.filter((w) => w.section === sec);
+        if (!rows.length) return;
+        const rowsHtml = rows.map((w) => {
+          const myIdx = idx++;
+          const itemRows = ["ORD", "SPL"].map((item) => {
+            const it = w.items[item];
+            if (!(it.beedi || it.kooli || it.advance || it.patti || it.others)) return "";
+            return `<tr class="due-hist-${myIdx} due-hist-row" style="display:none;"><td colspan="2">${item}</td><td>${it.beedi}</td><td>${it.kooli}</td><td>${it.advance}</td><td>${it.patti}</td><td>${it.others}</td><td>${it.days}</td><td></td></tr>`;
+          }).join("");
+          const historyRows = w.history.map((h) =>
+            `<tr class="due-hist-${myIdx} due-hist-row" style="display:none;"><td colspan="2">${h.date} (${h.item})</td><td>${h.beedi || 0}</td><td>${h.kooli || 0}</td><td>${h.advance || 0}</td><td>${h.patti || 0}</td><td>${h.others || 0}</td><td></td><td></td></tr>`
+          ).join("");
+          return `<tr>
+              <td>${w.section}</td><td>${w.number}</td>
+              <td>${w.grand.beedi}</td><td>${w.grand.kooli}</td><td>${w.grand.advance}</td><td>${w.grand.patti}</td><td>${w.grand.others}</td><td>${w.grand.days}</td>
+              <td><button class="add-row-btn due-toggle-btn" id="due-toggle-${myIdx}" onclick="toggleDueHistory(${myIdx})">+</button></td>
+            </tr>
+            ${itemRows}
+            ${historyRows}`;
+        }).join("");
+        blocks += rowsHtml;
+      });
+
+      const html = `<h1>Worker Full Report</h1>
+        <p style="font-size:11px; color:var(--ink-soft);">SP, Spl ഒരേ worker pool ആയി കൂട്ടിച്ചേർത്തിരിക്കുന്നു (item മാറിയാലും ഒരു worker-ന്റെ മുഴുവൻ record ഒരുമിച്ച്). "+" ക്ലിക്ക് ചെയ്താൽ ORD/SPL item-wise breakdown ഉം full date-wise history ഉം കാണാം.</p>
+        <div class="report-section"><h2>Summary</h2>
+        <table class="report-table"><thead><tr><th>Sec</th><th>നമ്പർ</th><th>ബീഡി</th><th>കൂലി</th><th>അടവ്</th><th>പറ്റ്</th><th>Others</th><th>ദിവസങ്ങൾ</th><th></th></tr></thead><tbody>
+        ${blocks}
+        </tbody></table></div>`;
+      body.innerHTML = html;
+    }
+
     window.toggleDueHistory = function (idx) {
       const rows = document.querySelectorAll(".due-hist-" + idx);
       const btn = document.getElementById("due-toggle-" + idx);
@@ -1876,7 +2046,7 @@
 
     function renderWorkerDueReport(data) {
       const body = document.getElementById("report-body");
-      const sections = ["CO", "Spl", "SP"];
+      const sections = ["CO", "SP"];
       let idx = 0;
       let sectionBlocks = "";
 
@@ -1889,7 +2059,7 @@
           const receivable = w.net > 0 ? w.net : 0;
           sub.patti += w.pattiTotal; sub.advance += w.advanceTotal; sub.payable += payable; sub.receivable += receivable;
           const myIdx = idx++;
-          const historyRows = w.history.map((h) => `<tr class="due-hist-${myIdx}" style="display:none;"><td colspan="2">${h.date}</td><td>${h.patti || ""}</td><td>${h.advance || ""}</td><td></td><td></td><td></td></tr>`).join("");
+          const historyRows = w.history.map((h) => `<tr class="due-hist-${myIdx}" style="display:none;"><td colspan="2">${h.date} <span style="color:var(--ink-soft); font-size:10px;">(${h.section})</span></td><td>${h.patti || ""}</td><td>${h.advance || ""}</td><td></td><td></td><td></td></tr>`).join("");
           return `<tr>
               <td>${w.section}</td><td>${w.number}</td><td>${w.pattiTotal}</td><td>${w.advanceTotal}</td>
               <td class="report-net-neg">${payable || ""}</td><td class="report-net-pos">${receivable || ""}</td>
@@ -1901,6 +2071,7 @@
       });
 
       let html = `<h1>Workers പറ്റ് — Summary</h1>
+        <p style="font-size:11px; color:var(--ink-soft);">SP-ൽ, SP ഉം Spl ഉം ഒരേ worker pool ആയി കൂട്ടിച്ചേർത്തിട്ടുണ്ട് (ഒരു worker ORD/SPL item മാറി produce ചെയ്താലും അടവ് history ഒരുമിച്ച് കാണാൻ).</p>
         <div class="report-section"><h2>Summary</h2>
         <table class="report-table"><thead><tr><th>Section</th><th>നമ്പർ</th><th>ആകെ പറ്റ്</th><th>ആകെ അടവ്</th><th>കൊടുക്കാൻ</th><th>കിട്ടാൻ</th><th></th></tr></thead><tbody>
         ${sectionBlocks}
@@ -2095,8 +2266,11 @@
 
     /* ================= Settings tab: workers ================= */
 
+    let settingsWorkersCache = { CO: [], Spl: [], SP: [] };
+
     window.loadSettings = async function () {
       const workers = await fsGetWorkers();
+      settingsWorkersCache = workers;
       renderSettings(workers);
     };
 
@@ -2107,17 +2281,21 @@
         const card = document.createElement("div");
         card.className = "card";
         const nums = workers[sec.key] || [];
-        const chipHtml = nums.map((num) => `
-          <span class="chip">
-            ${num}
-            <button class="chip-x" onclick="removeWorkerUI('${sec.key}','${num}')">×</button>
-          </span>`).join("");
+        const rowsHtml = nums.map((num, idx) => `
+          <div class="field-row" style="padding:4px 10px;">
+            <span class="num" style="font-weight:bold;">${num}</span>
+            <span style="display:flex; gap:4px; align-items:center;">
+              <button class="add-row-btn" ${idx === 0 ? "disabled style='opacity:0.3;'" : ""} onclick="moveWorkerUI('${sec.key}','${num}',-1)">▲</button>
+              <button class="add-row-btn" ${idx === nums.length - 1 ? "disabled style='opacity:0.3;'" : ""} onclick="moveWorkerUI('${sec.key}','${num}',1)">▼</button>
+              <button class="chip-x" style="font-size:16px;" onclick="removeWorkerUI('${sec.key}','${num}')">×</button>
+            </span>
+          </div>`).join("");
         card.innerHTML = `
           <div class="card-head" style="border-left-color:${sec.accent}">${sec.label} — ${nums.length} എണ്ണം</div>
-          <div class="chip-wrap">${chipHtml}</div>
+          <div class="rows-scroll">${rowsHtml}</div>
           <div class="add-number-row">
             <input type="text" id="new-worker-${sec.key}" placeholder="പുതിയ നമ്പർ/പേര്">
-            <button class="action-btn" onclick="addWorkerUI('${sec.key}')">+ ചേർക്കുക</button>
+            <button class="action-btn" onclick="addWorkerUI('${sec.key}')">+ ചേർക്കുക (അവസാനം)</button>
           </div>
         `;
         root.appendChild(card);
@@ -2135,6 +2313,11 @@
 
     window.removeWorkerUI = async function (sec, num) {
       await fsRemoveWorker(sec, num);
+      loadSettings();
+    };
+
+    window.moveWorkerUI = async function (sec, num, direction) {
+      await fsMoveWorker(sec, settingsWorkersCache[sec] || [], num, direction);
       loadSettings();
     };
 
