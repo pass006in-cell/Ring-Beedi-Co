@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>റിംഗ് ബീഡി കണക്ക്</title>
+  <title>Ring Beedi Accounts</title>
   <style>
     html, body { width: 100%; overflow-x: hidden; margin: 0; }
     :root {
@@ -109,7 +109,7 @@
 <body>
 
   <div id="login-screen">
-    <h1>റിംഗ് ബീഡി കണക്ക്</h1>
+    <h1>Ring Beedi Accounts</h1>
     <div class="subtitle">Firebase · Sign in</div>
     <input type="email" id="login-email" placeholder="Email">
     <input type="password" id="login-password" placeholder="Password">
@@ -118,11 +118,12 @@
   </div>
 
   <div id="app-shell" style="display:none;">
-    <h1>റിംഗ് ബീഡി കണക്ക്</h1>
+    <h1>Ring Beedi Accounts</h1>
     <div class="subtitle">Firebase · Entry · Company Ledger · Stock · Settings · Reports</div>
 
     <div class="day-picker">
-      <button class="day-btn tab-btn active" id="tabbtn-entry" onclick="switchTab('entry')">Entry</button>
+      <button class="day-btn tab-btn active" id="tabbtn-home" onclick="switchTab('home')">Home</button>
+      <button class="day-btn tab-btn" id="tabbtn-entry" onclick="switchTab('entry')">Entry</button>
       <button class="day-btn tab-btn" id="tabbtn-ledger" onclick="switchTab('ledger')">Company Ledger</button>
       <button class="day-btn tab-btn" id="tabbtn-stock" onclick="switchTab('stock')">Stock</button>
       <button class="day-btn tab-btn" id="tabbtn-settings" onclick="switchTab('settings')">Settings</button>
@@ -130,8 +131,28 @@
       <button class="day-btn" onclick="doLogout()" style="margin-left:auto;">Logout</button>
     </div>
 
+    <!-- ===================== HOME TAB ===================== -->
+    <div id="tab-home">
+      <div id="home-dashboard">
+        <div class="card"><div style="padding:14px;">Loading...</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head" style="border-left-color: var(--rule);">Day Details</div>
+        <div style="padding:10px;">
+          <div class="day-picker no-print">
+            <input type="date" id="home-date-input">
+            <button class="action-btn" onclick="loadHomeDayDetail()">Load</button>
+            <button class="action-btn" onclick="window.print()" style="margin-left:auto;">🖨 Print / Save as PDF</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="home-day-detail"></div>
+    </div>
+
     <!-- ===================== ENTRY TAB ===================== -->
-    <div id="tab-entry">
+    <div id="tab-entry" style="display:none">
       <div class="day-picker">
         <button class="day-btn active" id="btn-monday" onclick="setDay('Monday')">Monday</button>
         <button class="day-btn" id="btn-thursday" onclick="setDay('Thursday')">Thursday</button>
@@ -142,53 +163,53 @@
       <div id="sections"></div>
 
       <div class="card">
-        <div class="card-head" style="border-left-color: var(--rule);">ദിവസത്തെ ക്യാഷ് കണക്ക്</div>
+        <div class="card-head" style="border-left-color: var(--rule);">Daily Cash Account</div>
         <div class="field-row">
           <span>Cash in Hand</span>
           <input type="text" id="cash-in-hand" inputmode="numeric" oninput="recalc()">
         </div>
-        <div class="field-row"><span>അടവ് — CO</span><span class="num readonly" id="advance-co">0</span></div>
-        <div class="field-row"><span>അടവ് — SP + Spl</span><span class="num readonly" id="advance-spspl">0</span></div>
+        <div class="field-row"><span>Advance — CO</span><span class="num readonly" id="advance-co">0</span></div>
+        <div class="field-row"><span>Advance — SP + Spl</span><span class="num readonly" id="advance-spspl">0</span></div>
 
         <div class="divider"></div>
-        <div class="expense-title" style="padding: 0 10px;">ചെലവുകൾ</div>
-        <div class="field-row"><span>കൂലി (gross)</span><span class="num readonly" id="gross-wage">0</span></div>
+        <div class="expense-title" style="padding: 0 10px;">Expenses</div>
+        <div class="field-row"><span>Wage (gross)</span><span class="num readonly" id="gross-wage">0</span></div>
 
         <div class="expense-block">
-          <div class="expense-title">സ്ഥിരം ജീവനക്കാരുടെ പേയ്‌മെന്റ്</div>
+          <div class="expense-title">Staff Payments</div>
           <div id="staff-list"></div>
-          <button class="add-row-btn" onclick="addExpense('StaffPayment')">+ ചേർക്കുക</button>
+          <button class="add-row-btn" onclick="addExpense('StaffPayment')">+ Add</button>
         </div>
         <div class="expense-block">
-          <div class="expense-title">മറ്റ് ചെലവുകൾ</div>
+          <div class="expense-title">Other Expenses</div>
           <div id="other-list"></div>
-          <button class="add-row-btn" onclick="addExpense('OtherDaily')">+ ചേർക്കുക</button>
+          <button class="add-row-btn" onclick="addExpense('OtherDaily')">+ Add</button>
         </div>
 
-        <div class="field-row"><span>പറ്റ് (worker രേഖകൾ)</span><span class="num readonly" id="patti-total">0</span></div>
-        <div class="field-row"><span>Others (worker രേഖകൾ)</span><span class="num readonly" id="others-total">0</span></div>
+        <div class="field-row"><span>Due (worker records)</span><span class="num readonly" id="patti-total">0</span></div>
+        <div class="field-row"><span>Others (worker records)</span><span class="num readonly" id="others-total">0</span></div>
 
         <div class="divider"></div>
         <div class="tally" id="bal-cash-tally">Bal Cash: 0</div>
 
         <div style="padding: 0 10px 12px 10px; text-align: right;">
-          <button class="action-btn primary" onclick="openReview()">ഈ ദിവസം Save ചെയ്യുക</button>
+          <button class="action-btn primary" onclick="openReview()">Save This Day</button>
         </div>
         <div class="status" id="status"></div>
       </div>
 
       <div class="card">
-        <div class="card-head" style="border-left-color: var(--accent-spl);">ബീഡി ബണ്ടിൽ (ഇന്ന്)</div>
-        <div class="field-row"><span>ORD (CO + SP)</span><span class="num readonly" id="ord-bundle-text">0 bundle, 0 കെട്ട്</span></div>
-        <div class="field-row"><span>SPL (Spl)</span><span class="num readonly" id="spl-bundle-text">0 bundle, 0 കെട്ട്</span></div>
+        <div class="card-head" style="border-left-color: var(--accent-spl);">Beedi Bundle (Today)</div>
+        <div class="field-row"><span>ORD (CO + SP)</span><span class="num readonly" id="ord-bundle-text">0 bundle, 0 kettu</span></div>
+        <div class="field-row"><span>SPL (Spl)</span><span class="num readonly" id="spl-bundle-text">0 bundle, 0 kettu</span></div>
       </div>
 
       <div id="review-overlay" class="overlay">
         <div class="box">
-          <h1 style="font-size:16px;">Review — Save ചെയ്യുന്നതിന് മുൻപ്</h1>
+          <h1 style="font-size:16px;">Review — Before Saving</h1>
           <div id="review-body" style="font-size:13px;"></div>
           <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:14px;">
-            <button class="day-btn" onclick="closeReview()">Edit ചെയ്യാം</button>
+            <button class="day-btn" onclick="closeReview()">Edit</button>
             <button class="action-btn primary" onclick="confirmSave()">Accept &amp; Save</button>
           </div>
         </div>
@@ -209,7 +230,7 @@
           </table>
         </div>
         <div style="padding: 10px 10px 12px 10px; text-align: right;">
-          <button class="action-btn primary" onclick="openLedgerReview()">Save ചെയ്യുക</button>
+          <button class="action-btn primary" onclick="openLedgerReview()">Save</button>
         </div>
         <div class="status" id="ledger-status"></div>
       </div>
@@ -219,7 +240,7 @@
           <h1 style="font-size:16px;">Review — Company Ledger</h1>
           <div id="ledger-review-body" style="font-size:13px;"></div>
           <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:14px;">
-            <button class="day-btn" onclick="closeLedgerReview()">Edit ചെയ്യാം</button>
+            <button class="day-btn" onclick="closeLedgerReview()">Edit</button>
             <button class="action-btn primary" onclick="confirmSaveLedger()">Accept &amp; Save</button>
           </div>
         </div>
@@ -234,7 +255,7 @@
       </div>
       <div id="stock-cards"></div>
       <div style="text-align:right; margin-bottom: 14px;">
-        <button class="action-btn primary" onclick="openStockReview()">Stock Save ചെയ്യുക</button>
+        <button class="action-btn primary" onclick="openStockReview()">Save Stock</button>
       </div>
       <div class="status" id="stock-status"></div>
 
@@ -243,7 +264,7 @@
           <h1 style="font-size:16px;">Review — Stock</h1>
           <div id="stock-review-body" style="font-size:13px;"></div>
           <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:14px;">
-            <button class="day-btn" onclick="closeStockReview()">Edit ചെയ്യാം</button>
+            <button class="day-btn" onclick="closeStockReview()">Edit</button>
             <button class="action-btn primary" onclick="confirmSaveStock()">Accept &amp; Save</button>
           </div>
         </div>
@@ -253,20 +274,46 @@
       <div id="settings-cards"></div>
 
       <div class="card">
+        <div class="card-head" style="border-left-color: var(--accent-spl);">Wage Rate Table</div>
+        <div style="padding: 10px;">
+          <p style="font-size:12px; color:var(--ink-soft); margin-top:0;">
+            For the correct wage to be calculated when the rate changes, each rate change needs an <b>effective date</b>.
+            Entries before that date keep using the old rate; from that date onward, the new rate applies.
+          </p>
+          <div id="rate-tables-list"></div>
+          <div class="divider"></div>
+          <div class="expense-title">Add New Rate Table</div>
+          <div class="day-picker" style="margin-bottom:8px;">
+            <span>Effective from:</span>
+            <input type="date" id="new-rate-effective-date">
+          </div>
+          <p style="font-size:11.5px; color:var(--ink-soft);">
+            Each line as <b>beedi,wage</b> (comma-separated) — the current table is pre-filled below; only edit the rows that changed.
+          </p>
+          <textarea id="new-rate-textarea" rows="10" style="width:100%; font-family: ui-monospace, monospace; font-size:12px; padding:6px; border:1px solid #CBD8CC; border-radius:3px;"></textarea>
+          <div style="margin-top:8px;">
+            <button class="action-btn" onclick="prefillRateTextarea()">Copy Current Rate Table</button>
+            <button class="action-btn primary" onclick="saveNewRateTable()">Save</button>
+          </div>
+          <div class="status" id="rate-table-status"></div>
+        </div>
+      </div>
+
+      <div class="card">
         <div class="card-head" style="border-left-color: var(--accent-sp);">Bulk Import</div>
         <div style="padding: 10px;">
           <p style="font-size:12px; color:var(--ink-soft); margin-top:0;">
-            ഒരു Excel (.xlsx) file-ൽ ഈ sheet-കൾ (ഏതെങ്കിലും ഉള്ളവ, exact sheet names) upload ചെയ്യാം:<br>
+            You can upload an Excel (.xlsx) file with any of these sheets (exact sheet names):<br>
             • <b>Entries</b> — Date, Day, Section, Number, Beedi, Advance, Patti, Others<br>
             • <b>Expenses</b> — Date, Type, Label, Amount (Type: StaffPayment/OtherDaily/NonDaily/Income)<br>
             • <b>CompanyLedger</b> — Date, OB, AdvanceCO, AdvanceSPSpl, SaleIncome, TotalIncome, Total, GrossWage, StaffTotal, OtherTotal, NonDailyTotal, PattiTotal, TotalExpense, OthersTotal, CB<br>
             • <b>CashSummary</b> — Date, Day, CashInHand, AdvanceCO, AdvanceSPSpl, TotalAvailable, GrossWage, StaffTotal, OtherTotal, PattiTotal, OthersTotal, TotalOutgo, BalCash<br>
-            (Date format: YYYY-MM-DD എല്ലാ sheet-ലും)
+            (Date format: YYYY-MM-DD on every sheet)
           </p>
           <input type="file" id="import-file-input" accept=".csv,.xlsx,.xls">
           <div style="margin-top:8px;">
             <button class="action-btn" onclick="parseImportFile()">Preview</button>
-            <button class="action-btn primary" id="import-confirm-btn" onclick="confirmImport()" style="display:none;">Import ചെയ്യുക</button>
+            <button class="action-btn primary" id="import-confirm-btn" onclick="confirmImport()" style="display:none;">Import</button>
           </div>
           <div id="import-preview" style="font-size:12px; margin-top:10px;"></div>
           <div class="status" id="import-status"></div>
@@ -277,21 +324,21 @@
         <div class="card-head" style="border-left-color: var(--accent-co);">Backup / Restore</div>
         <div style="padding: 10px;">
           <p style="font-size:12px; color:var(--ink-soft); margin-top:0;">
-            മൊത്തം data-യുടെ (Entries, Expenses, CompanyLedger, CashSummary, Stock, StockMovements, Workers) ഒരു
-            full backup Excel file ആയി download ചെയ്യാം, വേണമെങ്കിൽ അതിൽ നിന്ന് തന്നെ തിരിച്ച് restore ചെയ്യാം.
+            You can download a full backup of all data (Entries, Expenses, CompanyLedger, CashSummary, Stock, StockMovements, Workers)
+            as one Excel file, and restore from it later if needed.
           </p>
-          <button class="action-btn primary" onclick="downloadFullBackup()">⬇️ Backup ഡൗൺലോഡ് ചെയ്യുക</button>
+          <button class="action-btn primary" onclick="downloadFullBackup()">⬇️ Download Backup</button>
           <div class="status" id="backup-status"></div>
 
           <div class="divider"></div>
-          <div class="expense-title">Backup file-ൽ നിന്ന് Restore ചെയ്യുക</div>
+          <div class="expense-title">Restore from a Backup File</div>
           <p style="font-size:11.5px; color:var(--ink-soft);">
-            ⚠️ Restore ചെയ്യുന്നത് നിലവിലെ data overwrite ചെയ്യും (backup file-ൽ ഉള്ള dates/records-ന്).
+            ⚠️ Restoring will overwrite current data (for the dates/records present in the backup file).
           </p>
           <input type="file" id="restore-file-input" accept=".xlsx,.xls">
           <div style="margin-top:8px;">
             <button class="action-btn" onclick="previewRestore()">Preview</button>
-            <button class="action-btn primary" id="restore-confirm-btn" onclick="confirmRestore()" style="display:none; border-color:var(--rule); background:var(--rule);">Restore ചെയ്യുക</button>
+            <button class="action-btn primary" id="restore-confirm-btn" onclick="confirmRestore()" style="display:none; border-color:var(--rule); background:var(--rule);">Restore</button>
           </div>
           <div id="restore-preview" style="font-size:12px; margin-top:10px;"></div>
           <div class="status" id="restore-status"></div>
@@ -301,17 +348,17 @@
       <div class="card">
         <div class="card-head" style="border-left-color: var(--rule);">Delete Data (⚠️ Careful)</div>
         <div style="padding: 10px;">
-          <div class="expense-title">ഒരു ദിവസത്തെ മുഴുവൻ data delete ചെയ്യുക</div>
+          <div class="expense-title">Delete an entire day's data</div>
           <div class="day-picker" style="margin-bottom:14px;">
             <input type="date" id="delete-single-date">
-            <button class="action-btn" onclick="deleteSingleDay()" style="border-color:var(--rule); color:var(--rule);">Delete ചെയ്യുക</button>
+            <button class="action-btn" onclick="deleteSingleDay()" style="border-color:var(--rule); color:var(--rule);">Delete</button>
           </div>
-          <div class="expense-title">ഒരു date range-ന്റെ data ഒരുമിച്ച് delete ചെയ്യുക</div>
+          <div class="expense-title">Delete a whole date range's data</div>
           <div class="day-picker">
             <input type="date" id="delete-range-start">
             <span>to</span>
             <input type="date" id="delete-range-end">
-            <button class="action-btn" onclick="deleteDateRange()" style="border-color:var(--rule); color:var(--rule);">Delete ചെയ്യുക</button>
+            <button class="action-btn" onclick="deleteDateRange()" style="border-color:var(--rule); color:var(--rule);">Delete</button>
           </div>
           <div class="status" id="delete-status"></div>
         </div>
@@ -321,13 +368,13 @@
       <div class="day-picker no-print">
         <button class="day-btn" id="rbtn-daily" onclick="switchReport('daily')">Daily Report</button>
         <button class="day-btn" id="rbtn-period" onclick="switchReport('period')">Period Report</button>
-        <button class="day-btn" id="rbtn-due" onclick="switchReport('due')">Workers പറ്റ്</button>
+        <button class="day-btn" id="rbtn-due" onclick="switchReport('due')">Workers Due</button>
         <button class="day-btn" id="rbtn-stockbook" onclick="switchReport('stockbook')">Stock Book</button>
         <button class="day-btn" id="rbtn-full" onclick="switchReport('full')">Worker Full Report</button>
       </div>
       <div id="report-controls" class="no-print"></div>
       <div style="text-align:right; margin: 6px 0;" class="no-print">
-        <button class="action-btn" onclick="exportReportToExcel()">📊 Excel ആയി export ചെയ്യുക</button>
+        <button class="action-btn" onclick="exportReportToExcel()">📊 Export to Excel</button>
         <button class="action-btn primary" onclick="window.print()">🖨 Print / Save as PDF</button>
       </div>
       <div id="report-body"></div>
@@ -403,13 +450,57 @@
       { key: "SP", label: "SP", accent: "var(--accent-sp)", numbers: SP_NUMBERS },
     ];
 
-    function wageFor(beedi) {
+    // Rate table versioning: rates change over time (e.g. average per-kettu wage
+    // went from ~3.06 to ~4.30), so different DATES must use the rate table that
+    // was actually in effect that day — not whatever table is "current" now.
+    let wageTables = []; // cached, sorted ascending by effectiveFrom: [{effectiveFrom, rates}, ...]
+
+    async function fsLoadWageTables() {
+      const snap = await getDocs(collection(db, "wageTables"));
+      const list = [];
+      snap.forEach((d) => list.push(d.data()));
+      list.sort((a, b) => (a.effectiveFrom < b.effectiveFrom ? -1 : 1));
+      wageTables = list;
+    }
+
+    async function fsSeedWageTableIfEmpty() {
+      const snap = await getDocs(collection(db, "wageTables"));
+      if (!snap.empty) return false;
+      await setDoc(doc(db, "wageTables", "2000-01-01"), { effectiveFrom: "2000-01-01", rates: WAGE_TABLE });
+      return true;
+    }
+
+    async function fsSaveWageTable(effectiveFrom, rates) {
+      await setDoc(doc(db, "wageTables", effectiveFrom), { effectiveFrom, rates });
+      await fsLoadWageTables();
+    }
+
+    async function fsDeleteWageTable(effectiveFrom) {
+      await deleteDoc(doc(db, "wageTables", effectiveFrom));
+      await fsLoadWageTables();
+    }
+
+    function ratesForDate(dateStr) {
+      if (!wageTables.length) return WAGE_TABLE; // fallback if not loaded yet
+      let applicable = wageTables[0].rates;
+      for (const t of wageTables) {
+        if (t.effectiveFrom <= dateStr) applicable = t.rates;
+        else break;
+      }
+      return applicable;
+    }
+
+    /** dateStr should always be passed when known — it picks the rate table that
+     * was actually in effect on that date. Falls back to today's table only when
+     * no date is available (e.g. a brand-new row with no date context yet). */
+    function wageFor(beedi, dateStr) {
       const n = Number(beedi) || 0;
       const usable = Math.floor(n / 5) * 5;
       const carry = n - usable;
       if (usable <= 0) return { wage: 0, usable: 0, carry: carry };
       if (usable > 250) return { wage: null, usable: usable, carry: carry, overMax: true };
-      return { wage: WAGE_TABLE[usable] || 0, usable: usable, carry: carry };
+      const rates = ratesForDate(dateStr || todayStr());
+      return { wage: Number(rates[usable]) || 0, usable: usable, carry: carry };
     }
 
     function toBundles(kettu) {
@@ -470,7 +561,7 @@
           const d = byKey[sec.key + "__" + num] || {};
           const beedi = d.beedi ?? "";
           const advance = d.advance ?? "";
-          const w = wageFor(beedi);
+          const w = wageFor(beedi, dateStr);
           return {
             number: num, beedi: beedi, advance: advance,
             patti: d.patti ?? "", others: d.others ?? "",
@@ -485,7 +576,7 @@
     async function fsSaveEntries(dateStr, day, entries) {
       const promises = entries.map((e) => {
         const id = dateStr + "__" + e.section + "__" + e.number;
-        const w = wageFor(e.beedi);
+        const w = wageFor(e.beedi, dateStr);
         return setDoc(doc(db, "entries", id), {
           date: dateStr, day: day, section: e.section, number: String(e.number),
           beedi: Number(e.beedi) || 0, kooli: w.wage || 0, advance: Number(e.advance) || 0,
@@ -866,6 +957,46 @@
       ]);
     }
 
+    /* ================= Home dashboard data-layer ================= */
+
+    async function fsGetLatestStockByItem() {
+      // orderBy(date) only (no equality filter) avoids needing a composite index;
+      // filter by item client-side instead.
+      const snap = await getDocs(query(collection(db, "stock"), orderBy("date", "desc"), limit(20)));
+      const result = { ORD: null, SPL: null };
+      snap.forEach((d) => {
+        const data = d.data();
+        if (!result[data.item]) result[data.item] = data;
+      });
+      return result;
+    }
+
+    async function fsGetLastSale() {
+      const snap = await getDocs(query(collection(db, "expenses"), orderBy("date", "desc"), limit(30)));
+      for (const d of snap.docs) {
+        const data = d.data();
+        if (data.type === "Income" && (data.items || []).length) {
+          const lastItem = data.items[data.items.length - 1];
+          return { date: data.date, label: lastItem.label, amount: lastItem.amount };
+        }
+      }
+      return null;
+    }
+
+    async function fsGetLatestCashBalance() {
+      const snap = await getDocs(query(collection(db, "companyLedger"), orderBy("date", "desc"), limit(1)));
+      if (snap.empty) return null;
+      const d = snap.docs[0].data();
+      return { date: d.date, cb: d.cb };
+    }
+
+    async function fsGetHomeSummary() {
+      const [stockByItem, lastSale, cashBalance] = await Promise.all([
+        fsGetLatestStockByItem(), fsGetLastSale(), fsGetLatestCashBalance(),
+      ]);
+      return { stockByItem, lastSale, cashBalance };
+    }
+
     /* ================= Backup / Restore data-layer ================= */
 
     async function fsExportAllData() {
@@ -900,7 +1031,7 @@
       const writes = rows.filter((r) => r.date && r.section && r.number !== undefined && r.number !== "").map((r) => {
         const beedi = Number(r.beedi) || 0;
         const advance = Number(r.advance) || 0;
-        const w = wageFor(beedi);
+        const w = wageFor(beedi, r.date);
         const id = r.date + "__" + r.section + "__" + r.number;
         return [doc(db, "entries", id), {
           date: r.date, day: r.day || "", section: String(r.section), number: String(r.number),
@@ -1067,7 +1198,7 @@
 
     async function fsBulkImportEntries(rows) {
       const writes = rows.map((r) => {
-        const w = wageFor(r.beedi);
+        const w = wageFor(r.beedi, r.date);
         const id = r.date + "__" + r.section + "__" + r.number;
         return [doc(db, "entries", id), {
           date: r.date, day: r.day, section: r.section, number: r.number,
@@ -1103,8 +1234,8 @@
 
     /* ================= Stock data layer ================= */
 
-    function sumUsableList(list) {
-      return (list || []).reduce((s, r) => s + wageFor(r.beedi).usable, 0);
+    function sumUsableList(list, dateStr) {
+      return (list || []).reduce((s, r) => s + wageFor(r.beedi, dateStr).usable, 0);
     }
 
     async function fsGetPreviousClosingStock(item, dateStr) {
@@ -1142,8 +1273,8 @@
         return { opening, openingIsAuto: !existing, production, saleItems, shortItems };
       };
 
-      const ordProduction = sumUsableList(co) + sumUsableList(sp);
-      const splProduction = sumUsableList(spl);
+      const ordProduction = sumUsableList(co, dateStr) + sumUsableList(sp, dateStr);
+      const splProduction = sumUsableList(spl, dateStr);
 
       const ORD = await build("ORD", ordProduction, saleORD, shortORD, existingORD);
       const SPL = await build("SPL", splProduction, saleSPL, shortSPL, existingSPL);
@@ -1186,16 +1317,35 @@
     }
 
     /* ================= Tabs ================= */
-    window.switchTab = function (name) {
-      ["entry", "ledger", "stock", "settings", "reports"].forEach((t) => {
+    const ALL_TABS = ["home", "entry", "ledger", "stock", "settings", "reports"];
+    let historyDepth = 0; // 0 = at Home, 1 = in a sub-tab
+
+    function applyTab(name) {
+      ALL_TABS.forEach((t) => {
         document.getElementById("tab-" + t).style.display = t === name ? "" : "none";
         document.getElementById("tabbtn-" + t).classList.toggle("active", t === name);
       });
+      if (name === "home") loadHomeDashboard();
       if (name === "ledger") loadLedger();
       if (name === "stock") loadStock();
-      if (name === "settings") loadSettings();
+      if (name === "settings") { loadSettings(); loadRateTablesUI(); }
       if (name === "reports") switchReport("daily");
+    }
+
+    window.switchTab = function (name) {
+      applyTab(name);
+      if (name === "home") {
+        if (historyDepth === 1) { history.replaceState({ tab: "home" }, "", "#home"); historyDepth = 0; }
+      } else {
+        if (historyDepth === 0) { history.pushState({ tab: name }, "", "#" + name); historyDepth = 1; }
+        else { history.replaceState({ tab: name }, "", "#" + name); }
+      }
     };
+
+    window.addEventListener("popstate", () => {
+      historyDepth = 0;
+      applyTab("home");
+    });
 
     /* ================= Entry tab ================= */
     let entriesData = { CO: [], Spl: [], SP: [] };
@@ -1212,11 +1362,15 @@
     };
 
     async function init() {
+      await fsSeedWageTableIfEmpty();
+      await fsLoadWageTables();
       await fsSeedWorkersIfEmpty();
       const workers = await fsGetWorkers();
       SECTIONS.forEach((sec) => { sec.numbers = workers[sec.key]; });
       document.getElementById("date-input").value = todayStr();
-      loadDay();
+      document.getElementById("home-date-input").value = todayStr();
+      history.replaceState({ tab: "home" }, "", "#home");
+      applyTab("home");
     }
 
     window.loadDay = async function () {
@@ -1255,11 +1409,11 @@
         const card = document.createElement("div");
         card.className = "card";
         card.innerHTML = `
-          <div class="card-head" style="border-left-color:${sec.accent}">${sec.label} — ${rows.length} തൊഴിലാളികൾ</div>
+          <div class="card-head" style="border-left-color:${sec.accent}">${sec.label} — ${rows.length} workers</div>
           <div class="rows-scroll">
             <table>
               <thead><tr>
-                <th>നമ്പർ</th><th>ബീഡി</th><th>കൂലി</th><th>അടവ്</th><th>ബാക്കി</th><th>പറ്റ്</th><th>Others</th>
+                <th>No.</th><th>Beedi</th><th>Wage</th><th>Advance</th><th>Balance</th><th>Due</th><th>Others</th>
               </tr></thead>
               <tbody id="tbody-${sec.key}"></tbody>
             </table>
@@ -1289,7 +1443,7 @@
       entriesData[sec][idx][field] = el.value;
       if (field === "beedi" || field === "advance") {
         const r = entriesData[sec][idx];
-        const w = wageFor(r.beedi);
+        const w = wageFor(r.beedi, currentDate);
         r.kooli = w.wage || 0;
         r.balance = (w.wage || 0) - (Number(r.advance) || 0);
         document.getElementById(`kooli-${sec}-${idx}`).textContent = w.overMax ? "manual" : bz(w.wage || 0);
@@ -1330,7 +1484,7 @@
     };
 
     function sumUsable(list) {
-      return (list || []).reduce((s, r) => s + wageFor(r.beedi).usable, 0);
+      return (list || []).reduce((s, r) => s + wageFor(r.beedi, currentDate).usable, 0);
     }
 
     function recalc() {
@@ -1356,16 +1510,16 @@
       const ordBeedi = sumUsable(co) + sumUsable(sp);
       const splBeedi = sumUsable(spl);
       const ordB = toBundles(ordBeedi), splB = toBundles(splBeedi);
-      document.getElementById("ord-bundle-text").textContent = ordB.b + " bundle, " + ordB.r + " കെട്ട്";
-      document.getElementById("spl-bundle-text").textContent = splB.b + " bundle, " + splB.r + " കെട്ട്";
+      document.getElementById("ord-bundle-text").textContent = ordB.b + " bundle, " + ordB.r + " kettu";
+      document.getElementById("spl-bundle-text").textContent = splB.b + " bundle, " + splB.r + " kettu";
 
       SECTIONS.forEach((sec) => {
         const rows = entriesData[sec.key] || [];
         const el = document.getElementById(`totals-${sec.key}`);
         if (el) {
-          el.innerHTML = `<span>ബീഡി: <b>${sum(rows,'usable')||sum(rows,'beedi')}</b></span>
-            <span>കൂലി: <b>${sum(rows,'kooli')}</b></span>
-            <span>അടവ്: <b>${sum(rows,'advance')}</b></span>`;
+          el.innerHTML = `<span>Beedi: <b>${sum(rows,'usable')||sum(rows,'beedi')}</b></span>
+            <span>Wage: <b>${sum(rows,'kooli')}</b></span>
+            <span>Advance: <b>${sum(rows,'advance')}</b></span>`;
         }
       });
 
@@ -1387,14 +1541,14 @@
     }
 
     window.openReview = function () {
-      if (!currentDate) { setStatus("Date തിരഞ്ഞെടുക്കുക"); return; }
+      if (!currentDate) { setStatus("Please select a date"); return; }
       let html = `<p><b>${formatHeadingDate(currentDate)}</b></p>`;
       SECTIONS.forEach((sec) => {
         const rows = buildEntrySummaryRows(sec);
         if (!rows) return;
         html += `<div style="margin-top:8px;"><b>${sec.label}</b></div>
           <table style="width:100%; margin-bottom:6px;">
-            <tr><th>നമ്പർ</th><th>ബീഡി</th><th>കൂലി</th><th>അടവ്</th><th>ബാക്കി</th><th>പറ്റ്</th><th>Others</th></tr>
+            <tr><th>No.</th><th>Beedi</th><th>Wage</th><th>Advance</th><th>Balance</th><th>Due</th><th>Others</th></tr>
             ${rows}
           </table>`;
       });
@@ -1406,12 +1560,12 @@
 
       html += `<div class="divider"></div>
         <div class="field-row"><span>Cash in Hand</span><span class="num">${document.getElementById("cash-in-hand").value || 0}</span></div>
-        <div class="field-row"><span>അടവ് CO</span><span class="num">${document.getElementById("advance-co").textContent}</span></div>
-        <div class="field-row"><span>അടവ് SP+Spl</span><span class="num">${document.getElementById("advance-spspl").textContent}</span></div>
-        <div class="field-row"><span>കൂലി (gross)</span><span class="num">${document.getElementById("gross-wage").textContent}</span></div>
+        <div class="field-row"><span>Advance CO</span><span class="num">${document.getElementById("advance-co").textContent}</span></div>
+        <div class="field-row"><span>Advance SP+Spl</span><span class="num">${document.getElementById("advance-spspl").textContent}</span></div>
+        <div class="field-row"><span>Wage (gross)</span><span class="num">${document.getElementById("gross-wage").textContent}</span></div>
         ${staffRows}
         ${otherRows}
-        <div class="field-row"><span>പറ്റ്</span><span class="num">${document.getElementById("patti-total").textContent}</span></div>
+        <div class="field-row"><span>Due</span><span class="num">${document.getElementById("patti-total").textContent}</span></div>
         <div class="field-row"><span>Others</span><span class="num">${document.getElementById("others-total").textContent}</span></div>
         <div class="divider"></div>
         <div class="tally ${document.getElementById("bal-cash-tally").classList.contains("balanced") ? "balanced" : ""}">${document.getElementById("bal-cash-tally").textContent}</div>`;
@@ -1536,18 +1690,18 @@
       if (!ledgerData) { body.innerHTML = ""; return; }
 
       let rows = "";
-      if (ledgerData.advanceCO > 0) rows += ledgerFixedRow("അടവ് CO", ledgerData.advanceCO, "income");
-      if (ledgerData.advanceSPSpl > 0) rows += ledgerFixedRow("അടവ് SP+Spl", ledgerData.advanceSPSpl, "income");
+      if (ledgerData.advanceCO > 0) rows += ledgerFixedRow("Advance CO", ledgerData.advanceCO, "income");
+      if (ledgerData.advanceSPSpl > 0) rows += ledgerFixedRow("Advance SP+Spl", ledgerData.advanceSPSpl, "income");
       (ledgerData.incomeItems || []).forEach((it, idx) => { rows += ledgerEditableRow(it.label || "", it.amount || "", "income", "income", idx); });
-      rows += `<tr class="ledger-add-row"><td colspan="3"><button class="add-row-btn" onclick="addLedgerItem('income')">+ വരവ് ചേർക്കുക</button></td></tr>`;
+      rows += `<tr class="ledger-add-row"><td colspan="3"><button class="add-row-btn" onclick="addLedgerItem('income')">+ Add Income</button></td></tr>`;
 
-      if (ledgerData.grossWage > 0) rows += ledgerFixedRow("കൂലി", ledgerData.grossWage, "expense");
+      if (ledgerData.grossWage > 0) rows += ledgerFixedRow("Wage", ledgerData.grossWage, "expense");
       (ledgerData.staffItems || []).filter((it) => Number(it.amount) > 0).forEach((it) => { rows += ledgerFixedRow(it.label, it.amount, "expense"); });
       (ledgerData.otherItems || []).filter((it) => Number(it.amount) > 0).forEach((it) => { rows += ledgerFixedRow(it.label, it.amount, "expense"); });
       (ledgerData.nonDailyItems || []).forEach((it, idx) => { rows += ledgerEditableRow(it.label || "", it.amount || "", "expense", "nonDaily", idx); });
-      rows += `<tr class="ledger-add-row"><td colspan="3"><button class="add-row-btn" onclick="addLedgerItem('nonDaily')">+ ചെലവ് ചേർക്കുക</button></td></tr>`;
+      rows += `<tr class="ledger-add-row"><td colspan="3"><button class="add-row-btn" onclick="addLedgerItem('nonDaily')">+ Add Expense</button></td></tr>`;
 
-      if (ledgerData.pattiTotal > 0) rows += ledgerFixedRow("പറ്റ്", ledgerData.pattiTotal, "expense");
+      if (ledgerData.pattiTotal > 0) rows += ledgerFixedRow("Due", ledgerData.pattiTotal, "expense");
       if (ledgerData.othersTotal > 0) rows += ledgerFixedRow("Others", ledgerData.othersTotal, "income");
       if (ledgerData.othersTotal < 0) rows += ledgerFixedRow("Others", -ledgerData.othersTotal, "expense");
 
@@ -1608,17 +1762,17 @@
     function setLedgerStatus(msg) { document.getElementById("ledger-status").textContent = msg; }
 
     window.openLedgerReview = function () {
-      if (!ledgerDate) { setLedgerStatus("Date തിരഞ്ഞെടുക്കുക"); return; }
+      if (!ledgerDate) { setLedgerStatus("Please select a date"); return; }
       const t = ledgerTotals();
       let rows = "";
-      if (ledgerData.advanceCO > 0) rows += ledgerFixedRow("അടവ് CO", ledgerData.advanceCO, "income");
-      if (ledgerData.advanceSPSpl > 0) rows += ledgerFixedRow("അടവ് SP+Spl", ledgerData.advanceSPSpl, "income");
+      if (ledgerData.advanceCO > 0) rows += ledgerFixedRow("Advance CO", ledgerData.advanceCO, "income");
+      if (ledgerData.advanceSPSpl > 0) rows += ledgerFixedRow("Advance SP+Spl", ledgerData.advanceSPSpl, "income");
       (ledgerData.incomeItems || []).filter((it) => Number(it.amount) > 0).forEach((it) => { rows += ledgerFixedRow(it.label, it.amount, "income"); });
-      if (ledgerData.grossWage > 0) rows += ledgerFixedRow("കൂലി", ledgerData.grossWage, "expense");
+      if (ledgerData.grossWage > 0) rows += ledgerFixedRow("Wage", ledgerData.grossWage, "expense");
       (ledgerData.staffItems || []).filter((it) => Number(it.amount) > 0).forEach((it) => { rows += ledgerFixedRow(it.label, it.amount, "expense"); });
       (ledgerData.otherItems || []).filter((it) => Number(it.amount) > 0).forEach((it) => { rows += ledgerFixedRow(it.label, it.amount, "expense"); });
       (ledgerData.nonDailyItems || []).filter((it) => Number(it.amount) > 0).forEach((it) => { rows += ledgerFixedRow(it.label, it.amount, "expense"); });
-      if (ledgerData.pattiTotal > 0) rows += ledgerFixedRow("പറ്റ്", ledgerData.pattiTotal, "expense");
+      if (ledgerData.pattiTotal > 0) rows += ledgerFixedRow("Due", ledgerData.pattiTotal, "expense");
       if (ledgerData.othersTotal > 0) rows += ledgerFixedRow("Others", ledgerData.othersTotal, "income");
       if (ledgerData.othersTotal < 0) rows += ledgerFixedRow("Others", -ledgerData.othersTotal, "expense");
       rows += `<tr class="ledger-total-row"><td></td><td>${t.incomeTotal}</td><td>${t.expenseTotal}</td></tr>`;
@@ -1671,7 +1825,7 @@
     let stockBookItem = "ORD";
 
     window.exportReportToExcel = function () {
-      if (!lastReportData) { alert("ആദ്യം ഒരു report Load ചെയ്യുക"); return; }
+      if (!lastReportData) { alert("Please load a report first"); return; }
       const wb = XLSX.utils.book_new();
       if (currentReport === "daily") buildDailyReportWorkbook(wb, lastReportData);
       else if (currentReport === "period") buildPeriodReportWorkbook(wb, lastReportData);
@@ -1690,15 +1844,15 @@
     function buildDailyReportWorkbook(wb, data) {
       SECTIONS.forEach((sec) => {
         const rows = data.entries[sec.key] || [];
-        const aoa = [["നമ്പർ", "ബീഡി", "കൂലി", "അടവ്", "ബാക്കി", "പറ്റ്", "Others"]];
+        const aoa = [["No.", "Beedi", "Wage", "Advance", "Balance", "Due", "Others"]];
         rows.forEach((r) => aoa.push([r.number, r.beedi || 0, r.kooli || 0, r.advance || 0, r.balance || 0, r.patti || 0, r.others || 0]));
         addSheetFromAOA(wb, sec.label, aoa);
       });
       const l = data.ledger;
-      const led = [["Item", "Amount"], ["Date", data.date], ["OB", l.ob], ["അടവ് CO", l.advanceCO], ["അടവ് SP+Spl", l.advanceSPSpl]];
+      const led = [["Item", "Amount"], ["Date", data.date], ["OB", l.ob], ["Advance CO", l.advanceCO], ["Advance SP+Spl", l.advanceSPSpl]];
       (l.incomeItems || []).forEach((it) => led.push([it.label, it.amount]));
       led.push(["Total Income", l.totalIncome]);
-      led.push(["കൂലി", l.grossWage]);
+      led.push(["Wage", l.grossWage]);
       (l.staffItems || []).forEach((it) => led.push([it.label, it.amount]));
       (l.otherItems || []).forEach((it) => led.push([it.label, it.amount]));
       (l.nonDailyItems || []).forEach((it) => led.push([it.label, it.amount]));
@@ -1710,36 +1864,36 @@
     function buildPeriodReportWorkbook(wb, data) {
       SECTIONS.forEach((sec) => {
         const rows = data.workerRows[sec.key] || [];
-        const aoa = [["നമ്പർ", "ബീഡി", "കൂലി", "അടവ്", "പറ്റ്", "Others", "ദിവസങ്ങൾ", "Leave"]];
+        const aoa = [["No.", "Beedi", "Wage", "Advance", "Due", "Others", "Days", "Leave"]];
         rows.forEach((r) => aoa.push([r.number, r.beedi, r.kooli, r.advance, r.patti, r.others, r.days, r.leaveDays || 0]));
         addSheetFromAOA(wb, sec.label, aoa);
       });
-      const summary = [["Item", "Amount"], ["Period", data.startDate + " to " + data.endDate], ["OB", data.periodOB], ["അടവ് CO", data.advanceCO], ["അടവ് SP+Spl", data.advanceSPSpl]];
+      const summary = [["Item", "Amount"], ["Period", data.startDate + " to " + data.endDate], ["OB", data.periodOB], ["Advance CO", data.advanceCO], ["Advance SP+Spl", data.advanceSPSpl]];
       data.incomeList.forEach((it) => summary.push([it.date + " — " + it.label, it.amount]));
       summary.push(["Total Income", data.expenseTotals.Income + data.advanceCO + data.advanceSPSpl]);
-      summary.push(["കൂലി (ആകെ)", data.grossWage]);
+      summary.push(["Wage (Total)", data.grossWage]);
       Object.keys(data.staffByLabel).forEach((k) => summary.push([k, data.staffByLabel[k]]));
       Object.keys(data.otherByLabel).forEach((k) => summary.push([k, data.otherByLabel[k]]));
       data.nonDailyList.forEach((it) => summary.push([it.date + " — " + it.label, it.amount]));
-      summary.push(["പറ്റ് (ആകെ)", data.pattiTotal]);
-      summary.push(["Others (ആകെ)", data.othersTotal]);
+      summary.push(["Due (Total)", data.pattiTotal]);
+      summary.push(["Others (Total)", data.othersTotal]);
       summary.push(["CB (period end)", data.periodCB]);
       addSheetFromAOA(wb, "Summary", summary);
     }
 
     function buildWorkerDueWorkbook(wb, data) {
-      const summary = [["Section", "നമ്പർ", "ആകെ പറ്റ്", "ആകെ അടവ്", "കൊടുക്കാൻ", "കിട്ടാൻ"]];
+      const summary = [["Section", "No.", "Total Due", "Total Advance", "Payable", "Receivable"]];
       data.workers.forEach((w) => {
         const payable = w.net < 0 ? -w.net : 0;
         const receivable = w.net > 0 ? w.net : 0;
         summary.push([w.section, w.number, w.pattiTotal, w.advanceTotal, payable, receivable]);
       });
       summary.push([]);
-      summary.push(["കമ്പനി കൊടുക്കാൻ ഉള്ളത്", data.totalPayable]);
-      summary.push(["കമ്പനിക്ക് കിട്ടാൻ ഉള്ളത്", data.totalReceivable]);
+      summary.push(["Company Payable", data.totalPayable]);
+      summary.push(["Company Receivable", data.totalReceivable]);
       addSheetFromAOA(wb, "Summary", summary);
 
-      const history = [["Section", "നമ്പർ", "Date", "Item (Section that day)", "പറ്റ്", "അടവ്"]];
+      const history = [["Section", "No.", "Date", "Item (Section that day)", "Due", "Advance"]];
       data.workers.forEach((w) => {
         w.history.forEach((h) => history.push([w.section, w.number, h.date, h.section, h.patti || 0, h.advance || 0]));
       });
@@ -1753,13 +1907,13 @@
     }
 
     function buildWorkerFullWorkbook(wb, data) {
-      const summary = [["Section", "നമ്പർ", "ബീഡി", "കൂലി", "അടവ്", "പറ്റ്", "Others", "ദിവസങ്ങൾ"]];
+      const summary = [["Section", "No.", "Beedi", "Wage", "Advance", "Due", "Others", "Days"]];
       data.workers.forEach((w) => {
         summary.push([w.section, w.number, w.grand.beedi, w.grand.kooli, w.grand.advance, w.grand.patti, w.grand.others, w.grand.days]);
       });
       addSheetFromAOA(wb, "Summary", summary);
 
-      const itemWise = [["Section", "നമ്പർ", "Item", "ബീഡി", "കൂലി", "അടവ്", "പറ്റ്", "Others", "ദിവസങ്ങൾ"]];
+      const itemWise = [["Section", "No.", "Item", "Beedi", "Wage", "Advance", "Due", "Others", "Days"]];
       data.workers.forEach((w) => {
         ["ORD", "SPL"].forEach((item) => {
           const it = w.items[item];
@@ -1770,7 +1924,7 @@
       });
       addSheetFromAOA(wb, "Item-wise", itemWise);
 
-      const history = [["Section", "നമ്പർ", "Date", "Item", "ബീഡി", "കൂലി", "അടവ്", "ബാക്കി", "പറ്റ്", "Others"]];
+      const history = [["Section", "No.", "Date", "Item", "Beedi", "Wage", "Advance", "Balance", "Due", "Others"]];
       data.workers.forEach((w) => {
         w.history.forEach((h) => history.push([w.section, w.number, h.date, h.item, h.beedi, h.kooli, h.advance, h.balance, h.patti, h.others]));
       });
@@ -1835,7 +1989,7 @@
         const rows = (data.entries[sec.key] || []).filter((r) => (Number(r.beedi) || 0) > 0 || (Number(r.advance) || 0) > 0 || (Number(r.patti) || 0) > 0 || (Number(r.others) || 0) !== 0);
         if (!rows.length) return;
         html += `<div class="report-section"><h2>${sec.label}</h2>
-          <table class="report-table"><thead><tr><th>നമ്പർ</th><th>ബീഡി</th><th>കൂലി</th><th>അടവ്</th><th>ബാക്കി</th><th>പറ്റ്</th><th>Others</th></tr></thead><tbody>
+          <table class="report-table"><thead><tr><th>No.</th><th>Beedi</th><th>Wage</th><th>Advance</th><th>Balance</th><th>Due</th><th>Others</th></tr></thead><tbody>
           ${rows.map((r) => `<tr><td>${r.number}</td><td>${r.beedi||0}</td><td>${r.kooli||0}</td><td>${r.advance||0}</td><td>${r.balance||0}</td><td>${r.patti||0}</td><td>${r.others||0}</td></tr>`).join("")}
           </tbody></table></div>`;
       });
@@ -1844,11 +1998,11 @@
       html += `<div class="report-section"><h2>Company Ledger</h2>
         <table class="report-table"><tbody>
           <tr><td>OB</td><td>${l.ob}</td></tr>
-          <tr><td>അടവ് CO</td><td>${l.advanceCO}</td></tr>
-          <tr><td>അടവ് SP+Spl</td><td>${l.advanceSPSpl}</td></tr>
+          <tr><td>Advance CO</td><td>${l.advanceCO}</td></tr>
+          <tr><td>Advance SP+Spl</td><td>${l.advanceSPSpl}</td></tr>
           ${(l.incomeItems||[]).filter(it=>it.amount>0).map(it=>`<tr><td>${it.label}</td><td>${it.amount}</td></tr>`).join("")}
           <tr><td><b>Total Income</b></td><td><b>${l.totalIncome}</b></td></tr>
-          <tr><td>കൂലി</td><td>${l.grossWage}</td></tr>
+          <tr><td>Wage</td><td>${l.grossWage}</td></tr>
           ${(l.staffItems||[]).filter(it=>it.amount>0).map(it=>`<tr><td>${it.label}</td><td>${it.amount}</td></tr>`).join("")}
           ${(l.otherItems||[]).filter(it=>it.amount>0).map(it=>`<tr><td>${it.label}</td><td>${it.amount}</td></tr>`).join("")}
           ${(l.nonDailyItems||[]).filter(it=>it.amount>0).map(it=>`<tr><td>${it.label}</td><td>${it.amount}</td></tr>`).join("")}
@@ -1878,9 +2032,9 @@
         if (!rows.length) return;
         const t = data.sectionTotals[sec.key];
         html += `<div class="report-section"><h2>${sec.label}</h2>
-          <table class="report-table"><thead><tr><th>നമ്പർ</th><th>ബീഡി</th><th>കൂലി</th><th>അടവ്</th><th>പറ്റ്</th><th>Others</th><th>ദിവസങ്ങൾ</th><th>Leave</th></tr></thead><tbody>
+          <table class="report-table"><thead><tr><th>No.</th><th>Beedi</th><th>Wage</th><th>Advance</th><th>Due</th><th>Others</th><th>Days</th><th>Leave</th></tr></thead><tbody>
           ${rows.map((r) => `<tr><td>${r.number}</td><td>${r.beedi}</td><td>${r.kooli}</td><td>${r.advance}</td><td>${r.patti}</td><td>${r.others}</td><td>${r.days}</td><td>${r.leaveDays||0}</td></tr>`).join("")}
-          <tr style="font-weight:bold;"><td>ആകെ</td><td>${t.beedi}</td><td>${t.kooli}</td><td>${t.advance}</td><td>${t.patti}</td><td>${t.others}</td><td></td><td></td></tr>
+          <tr style="font-weight:bold;"><td>Total</td><td>${t.beedi}</td><td>${t.kooli}</td><td>${t.advance}</td><td>${t.patti}</td><td>${t.others}</td><td></td><td></td></tr>
           </tbody></table></div>`;
       });
 
@@ -1896,25 +2050,25 @@
       html += `<div class="report-section"><h2>Income (Period)</h2>
         <table class="report-table"><tbody>
           <tr><td>OB (period start)</td><td>${data.periodOB}</td></tr>
-          <tr><td>അടവ് CO</td><td>${data.advanceCO}</td></tr>
-          <tr><td>അടവ് SP+Spl</td><td>${data.advanceSPSpl}</td></tr>
+          <tr><td>Advance CO</td><td>${data.advanceCO}</td></tr>
+          <tr><td>Advance SP+Spl</td><td>${data.advanceSPSpl}</td></tr>
           ${incomeRows}
           <tr style="font-weight:bold;"><td>Total Income</td><td>${data.expenseTotals.Income + data.advanceCO + data.advanceSPSpl}</td></tr>
         </tbody></table></div>
 
         <div class="report-section" style="margin-top:16px;"><h2>Expense (Period)</h2>
         <table class="report-table"><tbody>
-          <tr><td>കൂലി (ആകെ)</td><td>${data.grossWage}</td></tr>
+          <tr><td>Wage (Total)</td><td>${data.grossWage}</td></tr>
           ${staffRows}
           ${otherRows}
           ${nonDailyRows}
-          <tr><td>പറ്റ് (ആകെ)</td><td>${data.pattiTotal}</td></tr>
+          <tr><td>Due (Total)</td><td>${data.pattiTotal}</td></tr>
           <tr style="font-weight:bold;"><td>Total Expense</td><td>${totalExpense}</td></tr>
         </tbody></table></div>
 
         <div class="report-section" style="margin-top:16px;"><h2>Summary</h2>
         <table class="report-table"><tbody>
-          <tr><td>Others (ആകെ)</td><td>${data.othersTotal}</td></tr>
+          <tr><td>Others (Total)</td><td>${data.othersTotal}</td></tr>
           <tr style="font-weight:bold;"><td>CB (period end)</td><td>${data.periodCB}</td></tr>
         </tbody></table></div>`;
 
@@ -1957,9 +2111,9 @@
         </tr>`;
       }).join("");
 
-      html += `<div class="report-section"><h2>ദിവസ-തിരിച്ച്</h2>
+      html += `<div class="report-section"><h2>Day-wise</h2>
         <table class="report-table"><thead><tr><th>Date (Day)</th><th>Opening</th><th>Production</th><th>Sale</th><th>Short</th><th>Closing</th></tr></thead><tbody>
-        ${dayRows || '<tr><td colspan="6">ഈ period-ൽ Stock save ചെയ്ത data ഒന്നും ഇല്ല.</td></tr>'}
+        ${dayRows || '<tr><td colspan="6">No stock data saved for this period.</td></tr>'}
         </tbody></table></div>`;
 
       if (rows.length) {
@@ -1971,11 +2125,11 @@
         const prB = toBundles(totalProduction), saB = toBundles(totalSale), shB = toBundles(totalShort);
         html += `<div class="report-section"><h2>Period Summary</h2>
           <table class="report-table"><tbody>
-            <tr><td>Opening (period start)</td><td>${opB.b} bundle, ${opB.r} കെട്ട്</td></tr>
-            <tr><td>Production (ആകെ)</td><td>${prB.b} bundle, ${prB.r} കെട്ട്</td></tr>
-            <tr><td>Sale (ആകെ)</td><td>${saB.b} bundle, ${saB.r} കെട്ട്</td></tr>
-            <tr><td>Short (ആകെ)</td><td>${shB.b} bundle, ${shB.r} കെട്ട്</td></tr>
-            <tr style="font-weight:bold;"><td>Closing (period end)</td><td>${clB.b} bundle, ${clB.r} കെട്ട്</td></tr>
+            <tr><td>Opening (period start)</td><td>${opB.b} bundle, ${opB.r} kettu</td></tr>
+            <tr><td>Production (Total)</td><td>${prB.b} bundle, ${prB.r} kettu</td></tr>
+            <tr><td>Sale (Total)</td><td>${saB.b} bundle, ${saB.r} kettu</td></tr>
+            <tr><td>Short (Total)</td><td>${shB.b} bundle, ${shB.r} kettu</td></tr>
+            <tr style="font-weight:bold;"><td>Closing (period end)</td><td>${clB.b} bundle, ${clB.r} kettu</td></tr>
           </tbody></table></div>`;
       }
 
@@ -2027,9 +2181,9 @@
       });
 
       const html = `<h1>Worker Full Report</h1>
-        <p style="font-size:11px; color:var(--ink-soft);">SP, Spl ഒരേ worker pool ആയി കൂട്ടിച്ചേർത്തിരിക്കുന്നു (item മാറിയാലും ഒരു worker-ന്റെ മുഴുവൻ record ഒരുമിച്ച്). "+" ക്ലിക്ക് ചെയ്താൽ ORD/SPL item-wise breakdown ഉം full date-wise history ഉം കാണാം.</p>
+        <p style="font-size:11px; color:var(--ink-soft);">SP and Spl are merged into one worker pool (a worker's full record stays together even if their item changes). Click "+" to see the ORD/SPL item-wise breakdown and full date-wise history.</p>
         <div class="report-section"><h2>Summary</h2>
-        <table class="report-table"><thead><tr><th>Sec</th><th>നമ്പർ</th><th>ബീഡി</th><th>കൂലി</th><th>അടവ്</th><th>പറ്റ്</th><th>Others</th><th>ദിവസങ്ങൾ</th><th></th></tr></thead><tbody>
+        <table class="report-table"><thead><tr><th>Sec</th><th>No.</th><th>Beedi</th><th>Wage</th><th>Advance</th><th>Due</th><th>Others</th><th>Days</th><th></th></tr></thead><tbody>
         ${blocks}
         </tbody></table></div>`;
       body.innerHTML = html;
@@ -2067,18 +2221,18 @@
             </tr>
             ${historyRows}`;
         }).join("");
-        sectionBlocks += rowsHtml + `<tr class="ledger-total-row"><td colspan="2">${sec} ആകെ</td><td>${sub.patti}</td><td>${sub.advance}</td><td class="report-net-neg">${sub.payable || ""}</td><td class="report-net-pos">${sub.receivable || ""}</td><td></td></tr>`;
+        sectionBlocks += rowsHtml + `<tr class="ledger-total-row"><td colspan="2">${sec} Total</td><td>${sub.patti}</td><td>${sub.advance}</td><td class="report-net-neg">${sub.payable || ""}</td><td class="report-net-pos">${sub.receivable || ""}</td><td></td></tr>`;
       });
 
-      let html = `<h1>Workers പറ്റ് — Summary</h1>
-        <p style="font-size:11px; color:var(--ink-soft);">SP-ൽ, SP ഉം Spl ഉം ഒരേ worker pool ആയി കൂട്ടിച്ചേർത്തിട്ടുണ്ട് (ഒരു worker ORD/SPL item മാറി produce ചെയ്താലും അടവ് history ഒരുമിച്ച് കാണാൻ).</p>
+      let html = `<h1>Workers Due — Summary</h1>
+        <p style="font-size:11px; color:var(--ink-soft);">Note: SP and Spl are merged into one worker pool (so even if a worker switches between producing ORD/SPL, their advance history stays together).</p>
         <div class="report-section"><h2>Summary</h2>
-        <table class="report-table"><thead><tr><th>Section</th><th>നമ്പർ</th><th>ആകെ പറ്റ്</th><th>ആകെ അടവ്</th><th>കൊടുക്കാൻ</th><th>കിട്ടാൻ</th><th></th></tr></thead><tbody>
+        <table class="report-table"><thead><tr><th>Section</th><th>No.</th><th>Total Due</th><th>Total Advance</th><th>Payable</th><th>Receivable</th><th></th></tr></thead><tbody>
         ${sectionBlocks}
         </tbody></table></div>
 
-        <div class="report-section"><h2>കമ്പനി മൊത്തം</h2>
-        <table class="report-table"><thead><tr><th>കൊടുക്കാൻ ഉള്ളത് (Company owes)</th><th>കിട്ടാൻ ഉള്ളത് (Workers owe)</th></tr></thead><tbody>
+        <div class="report-section"><h2>Company Overall</h2>
+        <table class="report-table"><thead><tr><th>Payable (Company owes)</th><th>Receivable (Workers owe)</th></tr></thead><tbody>
           <tr><td class="report-net-neg">${data.totalPayable}</td><td class="report-net-pos">${data.totalReceivable}</td></tr>
         </tbody></table></div>`;
 
@@ -2117,29 +2271,29 @@
         const card = document.createElement("div");
         card.className = "card";
         card.innerHTML = `
-          <div class="card-head" style="border-left-color: var(--accent-spl);">${item.label} സ്റ്റോക്ക് ബുക്ക്</div>
+          <div class="card-head" style="border-left-color: var(--accent-spl);">${item.label} Stock Book</div>
           <div class="field-row">
             <span>Opening Stock</span>
             <span style="display:flex; gap:4px;">
               <input type="text" inputmode="numeric" style="width:56px;" placeholder="${d.openingIsAuto ? opB.b : ''}" id="stock-open-b-${item.key}" value="${d.openingIsAuto ? '' : opB.b}" oninput="onStockOpenBundleInput('${item.key}')"> bundle
-              <input type="text" inputmode="numeric" style="width:56px;" placeholder="${d.openingIsAuto ? opB.r : ''}" id="stock-open-k-${item.key}" value="${d.openingIsAuto ? '' : opB.r}" oninput="onStockOpenBundleInput('${item.key}')"> കെട്ട്
+              <input type="text" inputmode="numeric" style="width:56px;" placeholder="${d.openingIsAuto ? opB.r : ''}" id="stock-open-k-${item.key}" value="${d.openingIsAuto ? '' : opB.r}" oninput="onStockOpenBundleInput('${item.key}')"> kettu
             </span>
           </div>
-          <div class="field-row"><span>Production (auto)</span><span class="num readonly">${prB.b} bundle, ${prB.r} കെട്ട്</span></div>
+          <div class="field-row"><span>Production (auto)</span><span class="num readonly">${prB.b} bundle, ${prB.r} kettu</span></div>
           <div class="expense-block">
             <div class="expense-title">Sale</div>
             <div id="stock-sale-${item.key}"></div>
-            <button class="add-row-btn" onclick="addStockItem('${item.key}','saleItems')">+ ചേർക്കുക</button>
-            <div class="stock-sub">ആകെ Sale: ${saleB.b} bundle, ${saleB.r} കെട്ട്</div>
+            <button class="add-row-btn" onclick="addStockItem('${item.key}','saleItems')">+ Add</button>
+            <div class="stock-sub">Total Sale: ${saleB.b} bundle, ${saleB.r} kettu</div>
           </div>
           <div class="expense-block">
             <div class="expense-title">Short</div>
             <div id="stock-short-${item.key}"></div>
-            <button class="add-row-btn" onclick="addStockItem('${item.key}','shortItems')">+ ചേർക്കുക</button>
-            <div class="stock-sub">ആകെ Short: ${shortB.b} bundle, ${shortB.r} കെട്ട്</div>
+            <button class="add-row-btn" onclick="addStockItem('${item.key}','shortItems')">+ Add</button>
+            <div class="stock-sub">Total Short: ${shortB.b} bundle, ${shortB.r} kettu</div>
           </div>
           <div class="divider"></div>
-          <div class="tally ${closing >= 0 ? 'balanced' : ''}" id="stock-closing-${item.key}">Closing Stock: ${clB.b} bundle, ${clB.r} കെട്ട്</div>
+          <div class="tally ${closing >= 0 ? 'balanced' : ''}" id="stock-closing-${item.key}">Closing Stock: ${clB.b} bundle, ${clB.r} kettu</div>
         `;
         root.appendChild(card);
         renderStockItemList(item.key, "saleItems");
@@ -2156,9 +2310,9 @@
         const row = document.createElement("div");
         row.className = "expense-row";
         row.innerHTML = `
-          <input class="label" type="text" placeholder="വിവരണം" value="${it.label || ''}" oninput="onStockItemInput('${itemKey}','${listKey}',${idx},'label',this)">
+          <input class="label" type="text" placeholder="Description" value="${it.label || ''}" oninput="onStockItemInput('${itemKey}','${listKey}',${idx},'label',this)">
           <input class="amount" type="text" inputmode="numeric" placeholder="bundle" value="${b.b || ''}" data-part="b" oninput="onStockItemBundleInput('${itemKey}','${listKey}',${idx},this)">
-          <input class="amount" type="text" inputmode="numeric" placeholder="കെട്ട്" value="${b.r || ''}" data-part="r" oninput="onStockItemBundleInput('${itemKey}','${listKey}',${idx},this)">
+          <input class="amount" type="text" inputmode="numeric" placeholder="kettu" value="${b.r || ''}" data-part="r" oninput="onStockItemBundleInput('${itemKey}','${listKey}',${idx},this)">
         `;
         c.appendChild(row);
       });
@@ -2201,7 +2355,7 @@
         const clB = toBundles(closing);
         const el = document.getElementById("stock-closing-" + item.key);
         if (el) {
-          el.textContent = "Closing Stock: " + clB.b + " bundle, " + clB.r + " കെട്ട്";
+          el.textContent = "Closing Stock: " + clB.b + " bundle, " + clB.r + " kettu";
           el.classList.toggle("balanced", closing >= 0);
         }
       });
@@ -2210,7 +2364,7 @@
     function setStockStatus(msg) { document.getElementById("stock-status").textContent = msg; }
 
     window.openStockReview = function () {
-      if (!stockDate) { setStockStatus("Date തിരഞ്ഞെടുക്കുക"); return; }
+      if (!stockDate) { setStockStatus("Please select a date"); return; }
       let html = `<p><b>${formatHeadingDate(stockDate)}</b></p>`;
       STOCK_ITEMS.forEach((item) => {
         const d = stockData[item.key];
@@ -2220,18 +2374,18 @@
         const closing = (Number(d.opening) || 0) + (Number(d.production) || 0) - saleTotal - shortTotal;
         const clB = toBundles(closing);
         const saleRows = (d.saleItems || []).filter((it) => it.label || it.amount)
-          .map((it) => { const b = toBundles(it.amount); return `<div class="field-row"><span>${it.label}</span><span class="num">${b.b} bundle, ${b.r} കെട്ട്</span></div>`; }).join("");
+          .map((it) => { const b = toBundles(it.amount); return `<div class="field-row"><span>${it.label}</span><span class="num">${b.b} bundle, ${b.r} kettu</span></div>`; }).join("");
         const shortRows = (d.shortItems || []).filter((it) => it.label || it.amount)
-          .map((it) => { const b = toBundles(it.amount); return `<div class="field-row"><span>${it.label}</span><span class="num">${b.b} bundle, ${b.r} കെട്ട്</span></div>`; }).join("");
+          .map((it) => { const b = toBundles(it.amount); return `<div class="field-row"><span>${it.label}</span><span class="num">${b.b} bundle, ${b.r} kettu</span></div>`; }).join("");
         html += `
           <div style="margin-top:10px;"><b>${item.label}</b></div>
-          <div class="field-row"><span>Opening</span><span class="num">${opB.b} bundle, ${opB.r} കെട്ട്</span></div>
-          <div class="field-row"><span>Production</span><span class="num">${prB.b} bundle, ${prB.r} കെട്ട്</span></div>
+          <div class="field-row"><span>Opening</span><span class="num">${opB.b} bundle, ${opB.r} kettu</span></div>
+          <div class="field-row"><span>Production</span><span class="num">${prB.b} bundle, ${prB.r} kettu</span></div>
           <div>Sale</div>${saleRows}
-          <div class="field-row"><span>ആകെ Sale</span><span class="num">${saleB.b} bundle, ${saleB.r} കെട്ട്</span></div>
+          <div class="field-row"><span>Total Sale</span><span class="num">${saleB.b} bundle, ${saleB.r} kettu</span></div>
           <div>Short</div>${shortRows}
-          <div class="field-row"><span>ആകെ Short</span><span class="num">${shortB.b} bundle, ${shortB.r} കെട്ട്</span></div>
-          <div class="tally ${closing >= 0 ? 'balanced' : ''}">Closing: ${clB.b} bundle, ${clB.r} കെട്ട്</div>
+          <div class="field-row"><span>Total Short</span><span class="num">${shortB.b} bundle, ${shortB.r} kettu</span></div>
+          <div class="tally ${closing >= 0 ? 'balanced' : ''}">Closing: ${clB.b} bundle, ${clB.r} kettu</div>
         `;
       });
       document.getElementById("stock-review-body").innerHTML = html;
@@ -2291,11 +2445,11 @@
             </span>
           </div>`).join("");
         card.innerHTML = `
-          <div class="card-head" style="border-left-color:${sec.accent}">${sec.label} — ${nums.length} എണ്ണം</div>
+          <div class="card-head" style="border-left-color:${sec.accent}">${sec.label} — ${nums.length} workers</div>
           <div class="rows-scroll">${rowsHtml}</div>
           <div class="add-number-row">
-            <input type="text" id="new-worker-${sec.key}" placeholder="പുതിയ നമ്പർ/പേര്">
-            <button class="action-btn" onclick="addWorkerUI('${sec.key}')">+ ചേർക്കുക (അവസാനം)</button>
+            <input type="text" id="new-worker-${sec.key}" placeholder="New number/name">
+            <button class="action-btn" onclick="addWorkerUI('${sec.key}')">+ Add (at end)</button>
           </div>
         `;
         root.appendChild(card);
@@ -2321,6 +2475,80 @@
       loadSettings();
     };
 
+    /* ================= Settings tab: rate tables ================= */
+
+    window.loadRateTablesUI = async function () {
+      await fsLoadWageTables();
+      renderRateTablesList();
+    };
+
+    function ratesToText(rates) {
+      const keys = Object.keys(rates).map(Number).sort((a, b) => a - b);
+      return keys.map((k) => k + "," + rates[k]).join("\n");
+    }
+
+    function parseRatesText(text) {
+      const rates = {};
+      text.split("\n").forEach((line) => {
+        const parts = line.split(",").map((s) => s.trim());
+        if (parts.length !== 2) return;
+        const beedi = Number(parts[0]);
+        const wage = Number(parts[1]);
+        if (beedi > 0 && !isNaN(wage)) rates[beedi] = wage;
+      });
+      return rates;
+    }
+
+    function renderRateTablesList() {
+      const el = document.getElementById("rate-tables-list");
+      if (!wageTables.length) {
+        el.innerHTML = "<p style='font-size:12px; color:var(--ink-soft);'>No rate tables yet.</p>";
+        return;
+      }
+      const today = todayStr();
+      let html = `<table class="report-table"><thead><tr><th>Effective From</th><th>Status</th><th></th></tr></thead><tbody>`;
+      wageTables.forEach((t, i) => {
+        const isActive = ratesForDate(today) === t.rates;
+        html += `<tr>
+          <td>${t.effectiveFrom}</td>
+          <td>${isActive ? '<span style="color:var(--accent-co); font-weight:bold;">Currently active</span>' : ''}</td>
+          <td>${wageTables.length > 1 ? `<button class="chip-x" onclick="deleteRateTableUI('${t.effectiveFrom}')">×</button>` : ''}</td>
+        </tr>`;
+      });
+      html += `</tbody></table>`;
+      el.innerHTML = html;
+    }
+
+    window.prefillRateTextarea = function () {
+      const rates = ratesForDate(todayStr());
+      document.getElementById("new-rate-textarea").value = ratesToText(rates);
+    };
+
+    window.saveNewRateTable = async function () {
+      const statusEl = document.getElementById("rate-table-status");
+      const effectiveFrom = document.getElementById("new-rate-effective-date").value;
+      const text = document.getElementById("new-rate-textarea").value.trim();
+      if (!effectiveFrom) { statusEl.textContent = "Please select an effective date"; return; }
+      const rates = parseRatesText(text);
+      if (!Object.keys(rates).length) { statusEl.textContent = "No valid rate rows found (use the beedi,wage format)"; return; }
+      statusEl.textContent = "Saving...";
+      try {
+        await fsSaveWageTable(effectiveFrom, rates);
+        statusEl.textContent = "✓ Rate table saved — " + effectiveFrom + " onward, this will apply.";
+        document.getElementById("new-rate-textarea").value = "";
+        document.getElementById("new-rate-effective-date").value = "";
+        renderRateTablesList();
+      } catch (err) {
+        statusEl.textContent = "Error: " + err.message;
+      }
+    };
+
+    window.deleteRateTableUI = async function (effectiveFrom) {
+      if (!confirm(effectiveFrom + " onward's rate table — delete it?")) return;
+      await fsDeleteWageTable(effectiveFrom);
+      renderRateTablesList();
+    };
+
     /* ================= Settings tab: bulk import ================= */
 
     window.parseImportFile = function () {
@@ -2328,7 +2556,7 @@
       const file = fileInput.files[0];
       const statusEl = document.getElementById("import-status");
       const previewEl = document.getElementById("import-preview");
-      if (!file) { statusEl.textContent = "File select ചെയ്യുക"; return; }
+      if (!file) { statusEl.textContent = "Please select a file"; return; }
       statusEl.textContent = "Reading...";
 
       const reader = new FileReader();
@@ -2357,14 +2585,14 @@
 
           const total = importData.entries.length + importData.expenses.length + importData.ledger.length + importData.cashSummary.length;
           if (!total) {
-            previewEl.innerHTML = "<p>Valid rows ഒന്നും കണ്ടില്ല. Sheet names / columns exact ആയി ഉണ്ടോ എന്ന് നോക്കുക.</p>";
+            previewEl.innerHTML = "<p>No valid rows found. Check that sheet names / columns are exactly right.</p>";
             document.getElementById("import-confirm-btn").style.display = "none";
             statusEl.textContent = "";
             return;
           }
 
           previewEl.innerHTML = `
-            <p>കണ്ടെത്തിയത്:</p>
+            <p>Found:</p>
             <ul style="margin:4px 0; padding-left:18px;">
               <li>Entries: <b>${importData.entries.length}</b> rows</li>
               <li>Expenses: <b>${importData.expenses.length}</b> rows</li>
@@ -2425,7 +2653,7 @@
         addJson("StockMovements", data.stockMovements);
         addJson("Workers", data.workers);
         XLSX.writeFile(wb, "RingBeedi-FullBackup-" + todayStr() + ".xlsx");
-        statusEl.textContent = "✓ Backup ഡൗൺലോഡ് ആയി.";
+        statusEl.textContent = "✓ Backup downloaded.";
       } catch (err) {
         statusEl.textContent = "Error: " + err.message;
       }
@@ -2436,7 +2664,7 @@
       const file = fileInput.files[0];
       const statusEl = document.getElementById("restore-status");
       const previewEl = document.getElementById("restore-preview");
-      if (!file) { statusEl.textContent = "File select ചെയ്യുക"; return; }
+      if (!file) { statusEl.textContent = "Please select a file"; return; }
       statusEl.textContent = "Reading...";
 
       const reader = new FileReader();
@@ -2454,13 +2682,13 @@
           };
           const total = Object.values(restoreData).reduce((s, arr) => s + arr.length, 0);
           if (!total) {
-            previewEl.innerHTML = "<p>Valid data ഒന്നും കണ്ടില്ല. ഇത് ഈ app-ന്റെ backup file തന്നെയാണോ എന്ന് നോക്കുക.</p>";
+            previewEl.innerHTML = "<p>No valid data found. Check that this is actually a backup file from this app.</p>";
             document.getElementById("restore-confirm-btn").style.display = "none";
             statusEl.textContent = "";
             return;
           }
           previewEl.innerHTML = `
-            <p>Backup file-ൽ കണ്ടെത്തിയത്:</p>
+            <p>Found in the backup file:</p>
             <ul style="margin:4px 0; padding-left:18px;">
               <li>Entries: <b>${restoreData.entries.length}</b></li>
               <li>Expenses: <b>${restoreData.expenses.length}</b></li>
@@ -2482,7 +2710,7 @@
     window.confirmRestore = async function () {
       const statusEl = document.getElementById("restore-status");
       if (!restoreData) return;
-      if (!confirm("Restore ചെയ്യണോ? Backup file-ൽ ഉള്ള dates-ന്റെ നിലവിലെ data overwrite ആകും. ഇത് തിരിച്ചെടുക്കാൻ പറ്റില്ല.")) return;
+      if (!confirm("Restore? The current data for the dates in the backup file will be overwritten. This cannot be undone.")) return;
       statusEl.textContent = "Restoring...";
       try {
         await Promise.all([
@@ -2506,12 +2734,12 @@
     window.deleteSingleDay = async function () {
       const date = document.getElementById("delete-single-date").value;
       const statusEl = document.getElementById("delete-status");
-      if (!date) { statusEl.textContent = "Date select ചെയ്യുക"; return; }
-      if (!confirm(date + " ന്റെ മുഴുവൻ data ഉം delete ചെയ്യണോ? ഇത് തിരിച്ചെടുക്കാൻ പറ്റില്ല.")) return;
+      if (!date) { statusEl.textContent = "Please select a date"; return; }
+      if (!confirm(date + "'s entire data — delete it? This cannot be undone.")) return;
       statusEl.textContent = "Deleting...";
       try {
         await fsDeleteDayData(date);
-        statusEl.textContent = "✓ " + date + " ന്റെ data delete ചെയ്തു.";
+        statusEl.textContent = "✓ " + date + "'s data deleted.";
       } catch (err) {
         statusEl.textContent = "Error: " + err.message;
       }
@@ -2521,16 +2749,107 @@
       const start = document.getElementById("delete-range-start").value;
       const end = document.getElementById("delete-range-end").value;
       const statusEl = document.getElementById("delete-status");
-      if (!start || !end) { statusEl.textContent = "Date range select ചെയ്യുക"; return; }
-      if (!confirm(start + " മുതൽ " + end + " വരെയുള്ള മുഴുവൻ data ഉം delete ചെയ്യണോ? ഇത് തിരിച്ചെടുക്കാൻ പറ്റില്ല.")) return;
+      if (!start || !end) { statusEl.textContent = "Please select a date range"; return; }
+      if (!confirm(start + " to " + end + " — delete all data in this range? This cannot be undone.")) return;
       statusEl.textContent = "Deleting...";
       try {
         const count = await fsDeleteDateRange(start, end);
-        statusEl.textContent = "✓ " + count + " records delete ചെയ്തു.";
+        statusEl.textContent = "✓ " + count + " records deleted.";
       } catch (err) {
         statusEl.textContent = "Error: " + err.message;
       }
     };
+
+    /* ================= Home tab UI ================= */
+
+    async function loadHomeDashboard() {
+      const root = document.getElementById("home-dashboard");
+      root.innerHTML = `<div class="card"><div style="padding:14px;">Loading...</div></div>`;
+      try {
+        const summary = await fsGetHomeSummary();
+        const ordB = summary.stockByItem.ORD ? toBundles(summary.stockByItem.ORD.closing) : null;
+        const splB = summary.stockByItem.SPL ? toBundles(summary.stockByItem.SPL.closing) : null;
+
+        root.innerHTML = `
+          <div class="card">
+            <div class="card-head" style="border-left-color: var(--accent-spl);">Item-wise Today's Stock</div>
+            <div class="field-row"><span>ORD</span><span class="num readonly">${ordB ? ordB.b + " bundle, " + ordB.r + " kettu (as of " + summary.stockByItem.ORD.date + ")" : "No data yet"}</span></div>
+            <div class="field-row"><span>SPL</span><span class="num readonly">${splB ? splB.b + " bundle, " + splB.r + " kettu (as of " + summary.stockByItem.SPL.date + ")" : "No data yet"}</span></div>
+          </div>
+          <div class="card">
+            <div class="card-head" style="border-left-color: var(--accent-sp);">Last Sale</div>
+            <div style="padding:10px;">
+              ${summary.lastSale
+                ? `<div class="field-row"><span>${summary.lastSale.date} — ${summary.lastSale.label}</span><span class="num readonly">${summary.lastSale.amount}</span></div>`
+                : `<p style="font-size:12px; color:var(--ink-soft); margin:0; padding:0 10px;">No sale recorded yet</p>`}
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head" style="border-left-color: var(--rule);">Cash Balance</div>
+            <div class="tally ${summary.cashBalance && summary.cashBalance.cb >= 0 ? 'balanced' : ''}">
+              ${summary.cashBalance ? "CB: " + summary.cashBalance.cb + " (as of " + summary.cashBalance.date + ")" : "No Company Ledger data yet"}
+            </div>
+          </div>
+        `;
+      } catch (err) {
+        root.innerHTML = `<div class="card"><div style="padding:14px; color:var(--rule);">Error: ${err.message}</div></div>`;
+      }
+    }
+
+    window.loadHomeDayDetail = async function () {
+      const date = document.getElementById("home-date-input").value;
+      const root = document.getElementById("home-day-detail");
+      if (!date) return;
+      root.innerHTML = "<p>Loading...</p>";
+      try {
+        const [cashSummary, ledger] = await Promise.all([fsGetCashSummary(date), fsGetCompanyLedgerForDate(date)]);
+        renderHomeDayDetail(date, cashSummary, ledger);
+      } catch (err) {
+        root.innerHTML = "<p>Error: " + err.message + "</p>";
+      }
+    };
+
+    function renderHomeDayDetail(date, cashSummary, l) {
+      const root = document.getElementById("home-day-detail");
+      let html = `<h1>${formatHeadingDate(date)}</h1>`;
+
+      html += `<div class="report-section"><h2>Daily Cash Account</h2>
+        <table class="report-table"><tbody>`;
+      if (cashSummary) {
+        html += `
+          <tr><td>Cash in Hand</td><td>${cashSummary.cashInHand}</td></tr>
+          <tr><td>Advance — CO</td><td>${cashSummary.advanceCO}</td></tr>
+          <tr><td>Advance — SP + Spl</td><td>${cashSummary.advanceSPSpl}</td></tr>
+          <tr><td><b>Total Available</b></td><td><b>${cashSummary.totalAvailable}</b></td></tr>
+          <tr><td>Wage (gross)</td><td>${cashSummary.grossWage}</td></tr>
+          <tr><td>Staff Payments</td><td>${cashSummary.staffTotal}</td></tr>
+          <tr><td>Other Expenses</td><td>${cashSummary.otherTotal}</td></tr>
+          <tr><td>Due (worker records)</td><td>${cashSummary.pattiTotal}</td></tr>
+          <tr><td>Others (worker records)</td><td>${cashSummary.othersTotal}</td></tr>
+          <tr><td><b>Total Outgo</b></td><td><b>${cashSummary.totalOutgo}</b></td></tr>
+          <tr><td><b>Bal Cash</b></td><td><b>${cashSummary.balCash}</b></td></tr>`;
+      } else {
+        html += `<tr><td colspan="2">Daily cash account not saved for this date yet.</td></tr>`;
+      }
+      html += `</tbody></table></div>`;
+
+      html += `<div class="report-section"><h2>Company Ledger</h2>
+        <table class="report-table"><tbody>
+          <tr><td>OB</td><td>${l.ob}</td></tr>
+          <tr><td>Advance — CO</td><td>${l.advanceCO}</td></tr>
+          <tr><td>Advance — SP+Spl</td><td>${l.advanceSPSpl}</td></tr>
+          ${(l.incomeItems || []).filter((it) => it.amount > 0).map((it) => `<tr><td>${it.label}</td><td>${it.amount}</td></tr>`).join("")}
+          <tr><td><b>Total Income</b></td><td><b>${l.totalIncome}</b></td></tr>
+          <tr><td>Wage</td><td>${l.grossWage}</td></tr>
+          ${(l.staffItems || []).filter((it) => it.amount > 0).map((it) => `<tr><td>${it.label}</td><td>${it.amount}</td></tr>`).join("")}
+          ${(l.otherItems || []).filter((it) => it.amount > 0).map((it) => `<tr><td>${it.label}</td><td>${it.amount}</td></tr>`).join("")}
+          ${(l.nonDailyItems || []).filter((it) => it.amount > 0).map((it) => `<tr><td>${it.label}</td><td>${it.amount}</td></tr>`).join("")}
+          <tr><td><b>Total Expense</b></td><td><b>${l.totalExpense}</b></td></tr>
+          <tr><td><b>CB</b></td><td><b>${l.closingBalance}</b></td></tr>
+        </tbody></table></div>`;
+
+      root.innerHTML = html;
+    }
 
     /* ================= PWA: service worker registration ================= */
     if ("serviceWorker" in navigator) {
