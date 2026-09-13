@@ -84,6 +84,10 @@
     .report-net-neg { color: var(--accent-spl); font-weight: bold; }
     .due-hist-row { background: #FFF6DD; }
     .due-hist-row td { color: var(--ink-soft); font-size: 11.5px; }
+    .narrow-table { width: 100%; border-collapse: collapse; font-size: 12.5px; table-layout: fixed; }
+    .narrow-table th, .narrow-table td { padding: 4px 5px; border-bottom: 1px solid #E3E9E3; vertical-align: top; }
+    .narrow-table td:first-child, .narrow-table th:first-child { text-align: left; width: 62%; white-space: normal; overflow-wrap: anywhere; }
+    .narrow-table td:nth-child(2), .narrow-table th:nth-child(2) { text-align: right; width: 38%; font-family: ui-monospace, Menlo, Consolas, monospace; white-space: normal; overflow-wrap: anywhere; }
     .due-toggle-btn { background: #FFF6DD !important; border-color: #E0C878 !important; color: #8C6D1F !important; }
     .stock-sub { font-size: 11px; color: var(--ink-soft); margin: -2px 0 8px 0; }
     .chip-wrap { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 12px 10px 12px; }
@@ -789,8 +793,13 @@
       return section === "CO" ? "CO" : "SP"; // SP and Spl are the same worker pool (item can vary by day)
     }
 
+    function lookupWorkerName(names, pool, number) {
+      if (pool === "CO") return names["CO|" + number] || "";
+      return names["SP|" + number] || names["Spl|" + number] || "";
+    }
+
     async function fsGetWorkerDueReport() {
-      const snap = await getDocs(collection(db, "entries"));
+      const [snap, names] = await Promise.all([getDocs(collection(db, "entries")), fsGetWorkerNames()]);
       const byWorker = {};
       snap.forEach((docSnap) => {
         const r = docSnap.data();
@@ -799,7 +808,7 @@
         if (patti === 0 && advance === 0) return;
         const pool = identityPool(r.section);
         const key = pool + "|" + r.number;
-        if (!byWorker[key]) byWorker[key] = { section: pool, number: String(r.number), history: [], pattiTotal: 0, advanceTotal: 0 };
+        if (!byWorker[key]) byWorker[key] = { section: pool, number: String(r.number), name: lookupWorkerName(names, pool, r.number), history: [], pattiTotal: 0, advanceTotal: 0 };
         byWorker[key].history.push({ date: r.date, section: r.section, patti, advance });
         byWorker[key].pattiTotal += patti;
         byWorker[key].advanceTotal += advance;
@@ -821,7 +830,7 @@
     }
 
     async function fsGetWorkerFullReport() {
-      const snap = await getDocs(collection(db, "entries"));
+      const [snap, names] = await Promise.all([getDocs(collection(db, "entries")), fsGetWorkerNames()]);
       const byWorker = {};
       snap.forEach((docSnap) => {
         const r = docSnap.data();
@@ -833,7 +842,7 @@
         const key = pool + "|" + r.number;
         if (!byWorker[key]) {
           byWorker[key] = {
-            section: pool, number: String(r.number),
+            section: pool, number: String(r.number), name: lookupWorkerName(names, pool, r.number),
             items: {
               ORD: { beedi: 0, kooli: 0, advance: 0, patti: 0, others: 0, days: 0 },
               SPL: { beedi: 0, kooli: 0, advance: 0, patti: 0, others: 0, days: 0 },
@@ -909,10 +918,13 @@
       });
       if (migrations.length) await Promise.all(migrations);
 
-      const out = { CO: [], Spl: [], SP: [] };
+      const out = { CO: [], Spl: [], SP: [], names: {} };
       Object.keys(bySection).forEach((sec) => {
         bySection[sec].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
         out[sec] = bySection[sec].map((d) => String(d.number));
+        bySection[sec].forEach((d) => {
+          if (d.name) out.names[sec + "|" + String(d.number)] = d.name;
+        });
       });
       return out;
     }
@@ -935,6 +947,20 @@
       let maxOrder = -1;
       snap.forEach((d) => { const o = d.data().order; if (o !== undefined && o > maxOrder) maxOrder = o; });
       await setDoc(doc(db, "workers", section + "__" + number), { section, number: String(number), order: maxOrder + 1 });
+    }
+
+    async function fsSetWorkerName(section, number, name) {
+      await setDoc(doc(db, "workers", section + "__" + number), { name: name || "" }, { merge: true });
+    }
+
+    async function fsGetWorkerNames() {
+      const snap = await getDocs(collection(db, "workers"));
+      const names = {};
+      snap.forEach((d) => {
+        const data = d.data();
+        if (data.name) names[data.section + "|" + data.number] = data.name;
+      });
+      return names;
     }
 
     async function fsRemoveWorker(section, number) {
@@ -983,6 +1009,21 @@
       return null;
     }
 
+    async function fsGetLastStockSaleByItem() {
+      // orderBy(date) only (no equality filter) avoids needing a composite index;
+      // filter by type/item client-side instead.
+      const snap = await getDocs(query(collection(db, "stockMovements"), orderBy("date", "desc"), limit(40)));
+      const result = { ORD: null, SPL: null };
+      snap.forEach((d) => {
+        const data = d.data();
+        if (data.type === "Sale" && !result[data.item] && (data.items || []).length) {
+          const qty = data.items.reduce((s, it) => s + (Number(it.amount) || 0), 0);
+          result[data.item] = { date: data.date, qty };
+        }
+      });
+      return result;
+    }
+
     async function fsGetLatestCashBalance() {
       const snap = await getDocs(query(collection(db, "companyLedger"), orderBy("date", "desc"), limit(1)));
       if (snap.empty) return null;
@@ -991,10 +1032,10 @@
     }
 
     async function fsGetHomeSummary() {
-      const [stockByItem, lastSale, cashBalance] = await Promise.all([
-        fsGetLatestStockByItem(), fsGetLastSale(), fsGetLatestCashBalance(),
+      const [stockByItem, lastSale, lastStockSale, cashBalance] = await Promise.all([
+        fsGetLatestStockByItem(), fsGetLastSale(), fsGetLastStockSaleByItem(), fsGetLatestCashBalance(),
       ]);
-      return { stockByItem, lastSale, cashBalance };
+      return { stockByItem, lastSale, lastStockSale, cashBalance };
     }
 
     /* ================= Backup / Restore data-layer ================= */
@@ -1996,7 +2037,7 @@
 
       const l = data.ledger;
       html += `<div class="report-section"><h2>Company Ledger</h2>
-        <table class="report-table"><tbody>
+        <table class="narrow-table"><tbody>
           <tr><td>OB</td><td>${l.ob}</td></tr>
           <tr><td>Advance CO</td><td>${l.advanceCO}</td></tr>
           <tr><td>Advance SP+Spl</td><td>${l.advanceSPSpl}</td></tr>
@@ -2170,7 +2211,7 @@
             `<tr class="due-hist-${myIdx} due-hist-row" style="display:none;"><td colspan="2">${h.date} (${h.item})</td><td>${h.beedi || 0}</td><td>${h.kooli || 0}</td><td>${h.advance || 0}</td><td>${h.patti || 0}</td><td>${h.others || 0}</td><td></td><td></td></tr>`
           ).join("");
           return `<tr>
-              <td>${w.section}</td><td>${w.number}</td>
+              <td>${w.section}</td><td><button class="add-row-btn" style="font-weight:bold; text-decoration:underline; padding:0;" onclick="showWorkerLedger('${w.section}','${w.number}')">${w.number}</button>${w.name ? ' <span style="color:var(--ink-soft); font-size:11px;">(' + w.name + ')</span>' : ''}</td>
               <td>${w.grand.beedi}</td><td>${w.grand.kooli}</td><td>${w.grand.advance}</td><td>${w.grand.patti}</td><td>${w.grand.others}</td><td>${w.grand.days}</td>
               <td><button class="add-row-btn due-toggle-btn" id="due-toggle-${myIdx}" onclick="toggleDueHistory(${myIdx})">+</button></td>
             </tr>
@@ -2198,6 +2239,40 @@
       btn.textContent = open ? "+" : "−";
     };
 
+    window.showWorkerLedger = function (section, number) {
+      if (!lastReportData || !lastReportData.workers) return;
+      const w = lastReportData.workers.find((x) => x.section === section && x.number === number);
+      if (!w) return;
+
+      const rows = w.history.map((h) =>
+        `<tr><td>${h.date}</td><td>${h.item}</td><td>${h.beedi || 0}</td><td>${h.kooli || 0}</td><td>${h.advance || 0}</td><td>${h.balance || 0}</td><td>${h.patti || 0}</td><td>${h.others || 0}</td></tr>`
+      ).join("");
+
+      const html = `
+        <div class="no-print" style="margin-bottom:10px;">
+          <button class="day-btn" onclick="backToWorkerFullReport()">← Back to Summary</button>
+        </div>
+        <h1>${section} — ${number}${w.name ? " (" + w.name + ")" : ""} — Day-wise Ledger</h1>
+        <div class="report-section"><h2>Totals</h2>
+          <table class="report-table"><tbody>
+            <tr><td>ORD</td><td>Beedi ${w.items.ORD.beedi}, Wage ${w.items.ORD.kooli}, Advance ${w.items.ORD.advance}, Due ${w.items.ORD.patti}, Others ${w.items.ORD.others}, Days ${w.items.ORD.days}</td></tr>
+            <tr><td>SPL</td><td>Beedi ${w.items.SPL.beedi}, Wage ${w.items.SPL.kooli}, Advance ${w.items.SPL.advance}, Due ${w.items.SPL.patti}, Others ${w.items.SPL.others}, Days ${w.items.SPL.days}</td></tr>
+            <tr style="font-weight:bold;"><td>Grand Total</td><td>Beedi ${w.grand.beedi}, Wage ${w.grand.kooli}, Advance ${w.grand.advance}, Due ${w.grand.patti}, Others ${w.grand.others}, Days ${w.grand.days}</td></tr>
+          </tbody></table>
+        </div>
+        <div class="report-section"><h2>Day-wise History</h2>
+          <table class="report-table"><thead><tr><th>Date</th><th>Item</th><th>Beedi</th><th>Wage</th><th>Advance</th><th>Balance</th><th>Due</th><th>Others</th></tr></thead><tbody>
+          ${rows || '<tr><td colspan="8">No history</td></tr>'}
+          </tbody></table>
+        </div>
+      `;
+      document.getElementById("report-body").innerHTML = html;
+    };
+
+    window.backToWorkerFullReport = function () {
+      if (lastReportData) renderWorkerFullReport(lastReportData);
+    };
+
     function renderWorkerDueReport(data) {
       const body = document.getElementById("report-body");
       const sections = ["CO", "SP"];
@@ -2215,7 +2290,7 @@
           const myIdx = idx++;
           const historyRows = w.history.map((h) => `<tr class="due-hist-${myIdx}" style="display:none;"><td colspan="2">${h.date} <span style="color:var(--ink-soft); font-size:10px;">(${h.section})</span></td><td>${h.patti || ""}</td><td>${h.advance || ""}</td><td></td><td></td><td></td></tr>`).join("");
           return `<tr>
-              <td>${w.section}</td><td>${w.number}</td><td>${w.pattiTotal}</td><td>${w.advanceTotal}</td>
+              <td>${w.section}</td><td>${w.number}${w.name ? ' <span style="color:var(--ink-soft); font-size:10px;">(' + w.name + ')</span>' : ''}</td><td>${w.pattiTotal}</td><td>${w.advanceTotal}</td>
               <td class="report-net-neg">${payable || ""}</td><td class="report-net-pos">${receivable || ""}</td>
               <td><button class="add-row-btn due-toggle-btn" id="due-toggle-${myIdx}" onclick="toggleDueHistory(${myIdx})">+</button></td>
             </tr>
@@ -2435,9 +2510,13 @@
         const card = document.createElement("div");
         card.className = "card";
         const nums = workers[sec.key] || [];
+        const names = workers.names || {};
         const rowsHtml = nums.map((num, idx) => `
-          <div class="field-row" style="padding:4px 10px;">
+          <div class="field-row" style="padding:4px 10px; flex-wrap:wrap;">
             <span class="num" style="font-weight:bold;">${num}</span>
+            <input type="text" placeholder="Name (optional, shown in Reports only)" value="${names[sec.key + '|' + num] || ''}"
+              style="flex:1; min-width:120px; margin:0 8px; padding:3px 6px; border:1px solid #CBD8CC; border-radius:3px; font-size:12px;"
+              onchange="saveWorkerNameUI('${sec.key}','${num}', this.value)">
             <span style="display:flex; gap:4px; align-items:center;">
               <button class="add-row-btn" ${idx === 0 ? "disabled style='opacity:0.3;'" : ""} onclick="moveWorkerUI('${sec.key}','${num}',-1)">▲</button>
               <button class="add-row-btn" ${idx === nums.length - 1 ? "disabled style='opacity:0.3;'" : ""} onclick="moveWorkerUI('${sec.key}','${num}',1)">▼</button>
@@ -2473,6 +2552,10 @@
     window.moveWorkerUI = async function (sec, num, direction) {
       await fsMoveWorker(sec, settingsWorkersCache[sec] || [], num, direction);
       loadSettings();
+    };
+
+    window.saveWorkerNameUI = async function (sec, num, name) {
+      await fsSetWorkerName(sec, num, name.trim());
     };
 
     /* ================= Settings tab: rate tables ================= */
@@ -2782,6 +2865,12 @@
               ${summary.lastSale
                 ? `<div class="field-row"><span>${summary.lastSale.date} — ${summary.lastSale.label}</span><span class="num readonly">${summary.lastSale.amount}</span></div>`
                 : `<p style="font-size:12px; color:var(--ink-soft); margin:0; padding:0 10px;">No sale recorded yet</p>`}
+              ${["ORD", "SPL"].map((item) => {
+                const s = summary.lastStockSale[item];
+                if (!s) return "";
+                const b = toBundles(s.qty);
+                return `<div class="field-row"><span>${item} sale qty (${s.date})</span><span class="num readonly">${b.b} bundle, ${b.r} kettu</span></div>`;
+              }).join("")}
             </div>
           </div>
           <div class="card">
@@ -2814,7 +2903,7 @@
       let html = `<h1>${formatHeadingDate(date)}</h1>`;
 
       html += `<div class="report-section"><h2>Daily Cash Account</h2>
-        <table class="report-table"><tbody>`;
+        <table class="narrow-table"><tbody>`;
       if (cashSummary) {
         html += `
           <tr><td>Cash in Hand</td><td>${cashSummary.cashInHand}</td></tr>
@@ -2834,7 +2923,7 @@
       html += `</tbody></table></div>`;
 
       html += `<div class="report-section"><h2>Company Ledger</h2>
-        <table class="report-table"><tbody>
+        <table class="narrow-table"><tbody>
           <tr><td>OB</td><td>${l.ob}</td></tr>
           <tr><td>Advance — CO</td><td>${l.advanceCO}</td></tr>
           <tr><td>Advance — SP+Spl</td><td>${l.advanceSPSpl}</td></tr>
