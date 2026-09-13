@@ -172,8 +172,8 @@
           <span>Cash in Hand</span>
           <input type="text" id="cash-in-hand" inputmode="numeric" oninput="recalc()">
         </div>
-        <div class="field-row"><span>Advance — CO</span><span class="num readonly" id="advance-co">0</span></div>
-        <div class="field-row"><span>Advance — SP + Spl</span><span class="num readonly" id="advance-spspl">0</span></div>
+        <div class="field-row"><span>Deposit — CO</span><span class="num readonly" id="advance-co">0</span></div>
+        <div class="field-row"><span>Deposit — SP + Spl</span><span class="num readonly" id="advance-spspl">0</span></div>
 
         <div class="divider"></div>
         <div class="expense-title" style="padding: 0 10px;">Expenses</div>
@@ -190,7 +190,7 @@
           <button class="add-row-btn" onclick="addExpense('OtherDaily')">+ Add</button>
         </div>
 
-        <div class="field-row"><span>Due (worker records)</span><span class="num readonly" id="patti-total">0</span></div>
+        <div class="field-row"><span>Advance (worker records)</span><span class="num readonly" id="patti-total">0</span></div>
         <div class="field-row"><span>Others (worker records)</span><span class="num readonly" id="others-total">0</span></div>
 
         <div class="divider"></div>
@@ -372,7 +372,7 @@
       <div class="day-picker no-print">
         <button class="day-btn" id="rbtn-daily" onclick="switchReport('daily')">Daily Report</button>
         <button class="day-btn" id="rbtn-period" onclick="switchReport('period')">Period Report</button>
-        <button class="day-btn" id="rbtn-due" onclick="switchReport('due')">Workers Due</button>
+        <button class="day-btn" id="rbtn-due" onclick="switchReport('due')">Workers Advance</button>
         <button class="day-btn" id="rbtn-stockbook" onclick="switchReport('stockbook')">Stock Book</button>
         <button class="day-btn" id="rbtn-full" onclick="switchReport('full')">Worker Full Report</button>
       </div>
@@ -997,18 +997,6 @@
       return result;
     }
 
-    async function fsGetLastSale() {
-      const snap = await getDocs(query(collection(db, "expenses"), orderBy("date", "desc"), limit(30)));
-      for (const d of snap.docs) {
-        const data = d.data();
-        if (data.type === "Income" && (data.items || []).length) {
-          const lastItem = data.items[data.items.length - 1];
-          return { date: data.date, label: lastItem.label, amount: lastItem.amount };
-        }
-      }
-      return null;
-    }
-
     async function fsGetLastStockSaleByItem() {
       // orderBy(date) only (no equality filter) avoids needing a composite index;
       // filter by type/item client-side instead.
@@ -1032,10 +1020,10 @@
     }
 
     async function fsGetHomeSummary() {
-      const [stockByItem, lastSale, lastStockSale, cashBalance] = await Promise.all([
-        fsGetLatestStockByItem(), fsGetLastSale(), fsGetLastStockSaleByItem(), fsGetLatestCashBalance(),
+      const [stockByItem, lastStockSale, cashBalance] = await Promise.all([
+        fsGetLatestStockByItem(), fsGetLastStockSaleByItem(), fsGetLatestCashBalance(),
       ]);
-      return { stockByItem, lastSale, lastStockSale, cashBalance };
+      return { stockByItem, lastStockSale, cashBalance };
     }
 
     /* ================= Backup / Restore data-layer ================= */
@@ -1454,7 +1442,7 @@
           <div class="rows-scroll">
             <table>
               <thead><tr>
-                <th>No.</th><th>Beedi</th><th>Wage</th><th>Advance</th><th>Balance</th><th>Due</th><th>Others</th>
+                <th>No.</th><th>Beedi</th><th>Wage</th><th>Deposit</th><th>Balance</th><th>Advance</th><th>Others</th>
               </tr></thead>
               <tbody id="tbody-${sec.key}"></tbody>
             </table>
@@ -1560,7 +1548,7 @@
         if (el) {
           el.innerHTML = `<span>Beedi: <b>${sum(rows,'usable')||sum(rows,'beedi')}</b></span>
             <span>Wage: <b>${sum(rows,'kooli')}</b></span>
-            <span>Advance: <b>${sum(rows,'advance')}</b></span>`;
+            <span>Deposit: <b>${sum(rows,'advance')}</b></span>`;
         }
       });
 
@@ -1589,7 +1577,7 @@
         if (!rows) return;
         html += `<div style="margin-top:8px;"><b>${sec.label}</b></div>
           <table style="width:100%; margin-bottom:6px;">
-            <tr><th>No.</th><th>Beedi</th><th>Wage</th><th>Advance</th><th>Balance</th><th>Due</th><th>Others</th></tr>
+            <tr><th>No.</th><th>Beedi</th><th>Wage</th><th>Deposit</th><th>Balance</th><th>Advance</th><th>Others</th></tr>
             ${rows}
           </table>`;
       });
@@ -1601,12 +1589,12 @@
 
       html += `<div class="divider"></div>
         <div class="field-row"><span>Cash in Hand</span><span class="num">${document.getElementById("cash-in-hand").value || 0}</span></div>
-        <div class="field-row"><span>Advance CO</span><span class="num">${document.getElementById("advance-co").textContent}</span></div>
-        <div class="field-row"><span>Advance SP+Spl</span><span class="num">${document.getElementById("advance-spspl").textContent}</span></div>
+        <div class="field-row"><span>Deposit CO</span><span class="num">${document.getElementById("advance-co").textContent}</span></div>
+        <div class="field-row"><span>Deposit SP+Spl</span><span class="num">${document.getElementById("advance-spspl").textContent}</span></div>
         <div class="field-row"><span>Wage (gross)</span><span class="num">${document.getElementById("gross-wage").textContent}</span></div>
         ${staffRows}
         ${otherRows}
-        <div class="field-row"><span>Due</span><span class="num">${document.getElementById("patti-total").textContent}</span></div>
+        <div class="field-row"><span>Advance</span><span class="num">${document.getElementById("patti-total").textContent}</span></div>
         <div class="field-row"><span>Others</span><span class="num">${document.getElementById("others-total").textContent}</span></div>
         <div class="divider"></div>
         <div class="tally ${document.getElementById("bal-cash-tally").classList.contains("balanced") ? "balanced" : ""}">${document.getElementById("bal-cash-tally").textContent}</div>`;
@@ -1731,8 +1719,8 @@
       if (!ledgerData) { body.innerHTML = ""; return; }
 
       let rows = "";
-      if (ledgerData.advanceCO > 0) rows += ledgerFixedRow("Advance CO", ledgerData.advanceCO, "income");
-      if (ledgerData.advanceSPSpl > 0) rows += ledgerFixedRow("Advance SP+Spl", ledgerData.advanceSPSpl, "income");
+      if (ledgerData.advanceCO > 0) rows += ledgerFixedRow("Deposit CO", ledgerData.advanceCO, "income");
+      if (ledgerData.advanceSPSpl > 0) rows += ledgerFixedRow("Deposit SP+Spl", ledgerData.advanceSPSpl, "income");
       (ledgerData.incomeItems || []).forEach((it, idx) => { rows += ledgerEditableRow(it.label || "", it.amount || "", "income", "income", idx); });
       rows += `<tr class="ledger-add-row"><td colspan="3"><button class="add-row-btn" onclick="addLedgerItem('income')">+ Add Income</button></td></tr>`;
 
@@ -1742,7 +1730,7 @@
       (ledgerData.nonDailyItems || []).forEach((it, idx) => { rows += ledgerEditableRow(it.label || "", it.amount || "", "expense", "nonDaily", idx); });
       rows += `<tr class="ledger-add-row"><td colspan="3"><button class="add-row-btn" onclick="addLedgerItem('nonDaily')">+ Add Expense</button></td></tr>`;
 
-      if (ledgerData.pattiTotal > 0) rows += ledgerFixedRow("Due", ledgerData.pattiTotal, "expense");
+      if (ledgerData.pattiTotal > 0) rows += ledgerFixedRow("Advance", ledgerData.pattiTotal, "expense");
       if (ledgerData.othersTotal > 0) rows += ledgerFixedRow("Others", ledgerData.othersTotal, "income");
       if (ledgerData.othersTotal < 0) rows += ledgerFixedRow("Others", -ledgerData.othersTotal, "expense");
 
@@ -1806,14 +1794,14 @@
       if (!ledgerDate) { setLedgerStatus("Please select a date"); return; }
       const t = ledgerTotals();
       let rows = "";
-      if (ledgerData.advanceCO > 0) rows += ledgerFixedRow("Advance CO", ledgerData.advanceCO, "income");
-      if (ledgerData.advanceSPSpl > 0) rows += ledgerFixedRow("Advance SP+Spl", ledgerData.advanceSPSpl, "income");
+      if (ledgerData.advanceCO > 0) rows += ledgerFixedRow("Deposit CO", ledgerData.advanceCO, "income");
+      if (ledgerData.advanceSPSpl > 0) rows += ledgerFixedRow("Deposit SP+Spl", ledgerData.advanceSPSpl, "income");
       (ledgerData.incomeItems || []).filter((it) => Number(it.amount) > 0).forEach((it) => { rows += ledgerFixedRow(it.label, it.amount, "income"); });
       if (ledgerData.grossWage > 0) rows += ledgerFixedRow("Wage", ledgerData.grossWage, "expense");
       (ledgerData.staffItems || []).filter((it) => Number(it.amount) > 0).forEach((it) => { rows += ledgerFixedRow(it.label, it.amount, "expense"); });
       (ledgerData.otherItems || []).filter((it) => Number(it.amount) > 0).forEach((it) => { rows += ledgerFixedRow(it.label, it.amount, "expense"); });
       (ledgerData.nonDailyItems || []).filter((it) => Number(it.amount) > 0).forEach((it) => { rows += ledgerFixedRow(it.label, it.amount, "expense"); });
-      if (ledgerData.pattiTotal > 0) rows += ledgerFixedRow("Due", ledgerData.pattiTotal, "expense");
+      if (ledgerData.pattiTotal > 0) rows += ledgerFixedRow("Advance", ledgerData.pattiTotal, "expense");
       if (ledgerData.othersTotal > 0) rows += ledgerFixedRow("Others", ledgerData.othersTotal, "income");
       if (ledgerData.othersTotal < 0) rows += ledgerFixedRow("Others", -ledgerData.othersTotal, "expense");
       rows += `<tr class="ledger-total-row"><td></td><td>${t.incomeTotal}</td><td>${t.expenseTotal}</td></tr>`;
@@ -1885,12 +1873,12 @@
     function buildDailyReportWorkbook(wb, data) {
       SECTIONS.forEach((sec) => {
         const rows = data.entries[sec.key] || [];
-        const aoa = [["No.", "Beedi", "Wage", "Advance", "Balance", "Due", "Others"]];
+        const aoa = [["No.", "Beedi", "Wage", "Deposit", "Balance", "Advance", "Others"]];
         rows.forEach((r) => aoa.push([r.number, r.beedi || 0, r.kooli || 0, r.advance || 0, r.balance || 0, r.patti || 0, r.others || 0]));
         addSheetFromAOA(wb, sec.label, aoa);
       });
       const l = data.ledger;
-      const led = [["Item", "Amount"], ["Date", data.date], ["OB", l.ob], ["Advance CO", l.advanceCO], ["Advance SP+Spl", l.advanceSPSpl]];
+      const led = [["Item", "Amount"], ["Date", data.date], ["OB", l.ob], ["Deposit CO", l.advanceCO], ["Deposit SP+Spl", l.advanceSPSpl]];
       (l.incomeItems || []).forEach((it) => led.push([it.label, it.amount]));
       led.push(["Total Income", l.totalIncome]);
       led.push(["Wage", l.grossWage]);
@@ -1905,25 +1893,25 @@
     function buildPeriodReportWorkbook(wb, data) {
       SECTIONS.forEach((sec) => {
         const rows = data.workerRows[sec.key] || [];
-        const aoa = [["No.", "Beedi", "Wage", "Advance", "Due", "Others", "Days", "Leave"]];
+        const aoa = [["No.", "Beedi", "Wage", "Deposit", "Advance", "Others", "Days", "Leave"]];
         rows.forEach((r) => aoa.push([r.number, r.beedi, r.kooli, r.advance, r.patti, r.others, r.days, r.leaveDays || 0]));
         addSheetFromAOA(wb, sec.label, aoa);
       });
-      const summary = [["Item", "Amount"], ["Period", data.startDate + " to " + data.endDate], ["OB", data.periodOB], ["Advance CO", data.advanceCO], ["Advance SP+Spl", data.advanceSPSpl]];
+      const summary = [["Item", "Amount"], ["Period", data.startDate + " to " + data.endDate], ["OB", data.periodOB], ["Deposit CO", data.advanceCO], ["Deposit SP+Spl", data.advanceSPSpl]];
       data.incomeList.forEach((it) => summary.push([it.date + " — " + it.label, it.amount]));
       summary.push(["Total Income", data.expenseTotals.Income + data.advanceCO + data.advanceSPSpl]);
       summary.push(["Wage (Total)", data.grossWage]);
       Object.keys(data.staffByLabel).forEach((k) => summary.push([k, data.staffByLabel[k]]));
       Object.keys(data.otherByLabel).forEach((k) => summary.push([k, data.otherByLabel[k]]));
       data.nonDailyList.forEach((it) => summary.push([it.date + " — " + it.label, it.amount]));
-      summary.push(["Due (Total)", data.pattiTotal]);
+      summary.push(["Advance (Total)", data.pattiTotal]);
       summary.push(["Others (Total)", data.othersTotal]);
       summary.push(["CB (period end)", data.periodCB]);
       addSheetFromAOA(wb, "Summary", summary);
     }
 
     function buildWorkerDueWorkbook(wb, data) {
-      const summary = [["Section", "No.", "Total Due", "Total Advance", "Payable", "Receivable"]];
+      const summary = [["Section", "No.", "Total Advance", "Total Deposit", "Payable", "Receivable"]];
       data.workers.forEach((w) => {
         const payable = w.net < 0 ? -w.net : 0;
         const receivable = w.net > 0 ? w.net : 0;
@@ -1934,7 +1922,7 @@
       summary.push(["Company Receivable", data.totalReceivable]);
       addSheetFromAOA(wb, "Summary", summary);
 
-      const history = [["Section", "No.", "Date", "Item (Section that day)", "Due", "Advance"]];
+      const history = [["Section", "No.", "Date", "Item (Section that day)", "Advance", "Deposit"]];
       data.workers.forEach((w) => {
         w.history.forEach((h) => history.push([w.section, w.number, h.date, h.section, h.patti || 0, h.advance || 0]));
       });
@@ -1948,13 +1936,13 @@
     }
 
     function buildWorkerFullWorkbook(wb, data) {
-      const summary = [["Section", "No.", "Beedi", "Wage", "Advance", "Due", "Others", "Days"]];
+      const summary = [["Section", "No.", "Beedi", "Wage", "Deposit", "Advance", "Others", "Days"]];
       data.workers.forEach((w) => {
         summary.push([w.section, w.number, w.grand.beedi, w.grand.kooli, w.grand.advance, w.grand.patti, w.grand.others, w.grand.days]);
       });
       addSheetFromAOA(wb, "Summary", summary);
 
-      const itemWise = [["Section", "No.", "Item", "Beedi", "Wage", "Advance", "Due", "Others", "Days"]];
+      const itemWise = [["Section", "No.", "Item", "Beedi", "Wage", "Deposit", "Advance", "Others", "Days"]];
       data.workers.forEach((w) => {
         ["ORD", "SPL"].forEach((item) => {
           const it = w.items[item];
@@ -1965,7 +1953,7 @@
       });
       addSheetFromAOA(wb, "Item-wise", itemWise);
 
-      const history = [["Section", "No.", "Date", "Item", "Beedi", "Wage", "Advance", "Balance", "Due", "Others"]];
+      const history = [["Section", "No.", "Date", "Item", "Beedi", "Wage", "Deposit", "Balance", "Advance", "Others"]];
       data.workers.forEach((w) => {
         w.history.forEach((h) => history.push([w.section, w.number, h.date, h.item, h.beedi, h.kooli, h.advance, h.balance, h.patti, h.others]));
       });
@@ -2030,7 +2018,7 @@
         const rows = (data.entries[sec.key] || []).filter((r) => (Number(r.beedi) || 0) > 0 || (Number(r.advance) || 0) > 0 || (Number(r.patti) || 0) > 0 || (Number(r.others) || 0) !== 0);
         if (!rows.length) return;
         html += `<div class="report-section"><h2>${sec.label}</h2>
-          <table class="report-table"><thead><tr><th>No.</th><th>Beedi</th><th>Wage</th><th>Advance</th><th>Balance</th><th>Due</th><th>Others</th></tr></thead><tbody>
+          <table class="report-table"><thead><tr><th>No.</th><th>Beedi</th><th>Wage</th><th>Deposit</th><th>Balance</th><th>Advance</th><th>Others</th></tr></thead><tbody>
           ${rows.map((r) => `<tr><td>${r.number}</td><td>${r.beedi||0}</td><td>${r.kooli||0}</td><td>${r.advance||0}</td><td>${r.balance||0}</td><td>${r.patti||0}</td><td>${r.others||0}</td></tr>`).join("")}
           </tbody></table></div>`;
       });
@@ -2039,8 +2027,8 @@
       html += `<div class="report-section"><h2>Company Ledger</h2>
         <table class="narrow-table"><tbody>
           <tr><td>OB</td><td>${l.ob}</td></tr>
-          <tr><td>Advance CO</td><td>${l.advanceCO}</td></tr>
-          <tr><td>Advance SP+Spl</td><td>${l.advanceSPSpl}</td></tr>
+          <tr><td>Deposit CO</td><td>${l.advanceCO}</td></tr>
+          <tr><td>Deposit SP+Spl</td><td>${l.advanceSPSpl}</td></tr>
           ${(l.incomeItems||[]).filter(it=>it.amount>0).map(it=>`<tr><td>${it.label}</td><td>${it.amount}</td></tr>`).join("")}
           <tr><td><b>Total Income</b></td><td><b>${l.totalIncome}</b></td></tr>
           <tr><td>Wage</td><td>${l.grossWage}</td></tr>
@@ -2073,7 +2061,7 @@
         if (!rows.length) return;
         const t = data.sectionTotals[sec.key];
         html += `<div class="report-section"><h2>${sec.label}</h2>
-          <table class="report-table"><thead><tr><th>No.</th><th>Beedi</th><th>Wage</th><th>Advance</th><th>Due</th><th>Others</th><th>Days</th><th>Leave</th></tr></thead><tbody>
+          <table class="report-table"><thead><tr><th>No.</th><th>Beedi</th><th>Wage</th><th>Deposit</th><th>Advance</th><th>Others</th><th>Days</th><th>Leave</th></tr></thead><tbody>
           ${rows.map((r) => `<tr><td>${r.number}</td><td>${r.beedi}</td><td>${r.kooli}</td><td>${r.advance}</td><td>${r.patti}</td><td>${r.others}</td><td>${r.days}</td><td>${r.leaveDays||0}</td></tr>`).join("")}
           <tr style="font-weight:bold;"><td>Total</td><td>${t.beedi}</td><td>${t.kooli}</td><td>${t.advance}</td><td>${t.patti}</td><td>${t.others}</td><td></td><td></td></tr>
           </tbody></table></div>`;
@@ -2091,8 +2079,8 @@
       html += `<div class="report-section"><h2>Income (Period)</h2>
         <table class="report-table"><tbody>
           <tr><td>OB (period start)</td><td>${data.periodOB}</td></tr>
-          <tr><td>Advance CO</td><td>${data.advanceCO}</td></tr>
-          <tr><td>Advance SP+Spl</td><td>${data.advanceSPSpl}</td></tr>
+          <tr><td>Deposit CO</td><td>${data.advanceCO}</td></tr>
+          <tr><td>Deposit SP+Spl</td><td>${data.advanceSPSpl}</td></tr>
           ${incomeRows}
           <tr style="font-weight:bold;"><td>Total Income</td><td>${data.expenseTotals.Income + data.advanceCO + data.advanceSPSpl}</td></tr>
         </tbody></table></div>
@@ -2103,7 +2091,7 @@
           ${staffRows}
           ${otherRows}
           ${nonDailyRows}
-          <tr><td>Due (Total)</td><td>${data.pattiTotal}</td></tr>
+          <tr><td>Advance (Total)</td><td>${data.pattiTotal}</td></tr>
           <tr style="font-weight:bold;"><td>Total Expense</td><td>${totalExpense}</td></tr>
         </tbody></table></div>
 
@@ -2224,7 +2212,7 @@
       const html = `<h1>Worker Full Report</h1>
         <p style="font-size:11px; color:var(--ink-soft);">SP and Spl are merged into one worker pool (a worker's full record stays together even if their item changes). Click "+" to see the ORD/SPL item-wise breakdown and full date-wise history.</p>
         <div class="report-section"><h2>Summary</h2>
-        <table class="report-table"><thead><tr><th>Sec</th><th>No.</th><th>Beedi</th><th>Wage</th><th>Advance</th><th>Due</th><th>Others</th><th>Days</th><th></th></tr></thead><tbody>
+        <table class="report-table"><thead><tr><th>Sec</th><th>No.</th><th>Beedi</th><th>Wage</th><th>Deposit</th><th>Advance</th><th>Others</th><th>Days</th><th></th></tr></thead><tbody>
         ${blocks}
         </tbody></table></div>`;
       body.innerHTML = html;
@@ -2255,13 +2243,13 @@
         <h1>${section} — ${number}${w.name ? " (" + w.name + ")" : ""} — Day-wise Ledger</h1>
         <div class="report-section"><h2>Totals</h2>
           <table class="report-table"><tbody>
-            <tr><td>ORD</td><td>Beedi ${w.items.ORD.beedi}, Wage ${w.items.ORD.kooli}, Advance ${w.items.ORD.advance}, Due ${w.items.ORD.patti}, Others ${w.items.ORD.others}, Days ${w.items.ORD.days}</td></tr>
-            <tr><td>SPL</td><td>Beedi ${w.items.SPL.beedi}, Wage ${w.items.SPL.kooli}, Advance ${w.items.SPL.advance}, Due ${w.items.SPL.patti}, Others ${w.items.SPL.others}, Days ${w.items.SPL.days}</td></tr>
-            <tr style="font-weight:bold;"><td>Grand Total</td><td>Beedi ${w.grand.beedi}, Wage ${w.grand.kooli}, Advance ${w.grand.advance}, Due ${w.grand.patti}, Others ${w.grand.others}, Days ${w.grand.days}</td></tr>
+            <tr><td>ORD</td><td>Beedi ${w.items.ORD.beedi}, Wage ${w.items.ORD.kooli}, Deposit ${w.items.ORD.advance}, Advance ${w.items.ORD.patti}, Others ${w.items.ORD.others}, Days ${w.items.ORD.days}</td></tr>
+            <tr><td>SPL</td><td>Beedi ${w.items.SPL.beedi}, Wage ${w.items.SPL.kooli}, Deposit ${w.items.SPL.advance}, Advance ${w.items.SPL.patti}, Others ${w.items.SPL.others}, Days ${w.items.SPL.days}</td></tr>
+            <tr style="font-weight:bold;"><td>Grand Total</td><td>Beedi ${w.grand.beedi}, Wage ${w.grand.kooli}, Deposit ${w.grand.advance}, Advance ${w.grand.patti}, Others ${w.grand.others}, Days ${w.grand.days}</td></tr>
           </tbody></table>
         </div>
         <div class="report-section"><h2>Day-wise History</h2>
-          <table class="report-table"><thead><tr><th>Date</th><th>Item</th><th>Beedi</th><th>Wage</th><th>Advance</th><th>Balance</th><th>Due</th><th>Others</th></tr></thead><tbody>
+          <table class="report-table"><thead><tr><th>Date</th><th>Item</th><th>Beedi</th><th>Wage</th><th>Deposit</th><th>Balance</th><th>Advance</th><th>Others</th></tr></thead><tbody>
           ${rows || '<tr><td colspan="8">No history</td></tr>'}
           </tbody></table>
         </div>
@@ -2299,10 +2287,10 @@
         sectionBlocks += rowsHtml + `<tr class="ledger-total-row"><td colspan="2">${sec} Total</td><td>${sub.patti}</td><td>${sub.advance}</td><td class="report-net-neg">${sub.payable || ""}</td><td class="report-net-pos">${sub.receivable || ""}</td><td></td></tr>`;
       });
 
-      let html = `<h1>Workers Due — Summary</h1>
+      let html = `<h1>Workers Advance — Summary</h1>
         <p style="font-size:11px; color:var(--ink-soft);">Note: SP and Spl are merged into one worker pool (so even if a worker switches between producing ORD/SPL, their advance history stays together).</p>
         <div class="report-section"><h2>Summary</h2>
-        <table class="report-table"><thead><tr><th>Section</th><th>No.</th><th>Total Due</th><th>Total Advance</th><th>Payable</th><th>Receivable</th><th></th></tr></thead><tbody>
+        <table class="report-table"><thead><tr><th>Section</th><th>No.</th><th>Total Advance</th><th>Total Deposit</th><th>Payable</th><th>Receivable</th><th></th></tr></thead><tbody>
         ${sectionBlocks}
         </tbody></table></div>
 
@@ -2862,12 +2850,9 @@
           <div class="card">
             <div class="card-head" style="border-left-color: var(--accent-sp);">Last Sale</div>
             <div style="padding:10px;">
-              ${summary.lastSale
-                ? `<div class="field-row"><span>${summary.lastSale.date} — ${summary.lastSale.label}</span><span class="num readonly">${summary.lastSale.amount}</span></div>`
-                : `<p style="font-size:12px; color:var(--ink-soft); margin:0; padding:0 10px;">No sale recorded yet</p>`}
               ${["ORD", "SPL"].map((item) => {
                 const s = summary.lastStockSale[item];
-                if (!s) return "";
+                if (!s) return `<div class="field-row"><span>${item}</span><span style="font-size:12px; color:var(--ink-soft);">No sale recorded yet</span></div>`;
                 const b = toBundles(s.qty);
                 return `<div class="field-row"><span>${item} sale qty (${s.date})</span><span class="num readonly">${b.b} bundle, ${b.r} kettu</span></div>`;
               }).join("")}
@@ -2907,13 +2892,13 @@
       if (cashSummary) {
         html += `
           <tr><td>Cash in Hand</td><td>${cashSummary.cashInHand}</td></tr>
-          <tr><td>Advance — CO</td><td>${cashSummary.advanceCO}</td></tr>
-          <tr><td>Advance — SP + Spl</td><td>${cashSummary.advanceSPSpl}</td></tr>
+          <tr><td>Deposit — CO</td><td>${cashSummary.advanceCO}</td></tr>
+          <tr><td>Deposit — SP + Spl</td><td>${cashSummary.advanceSPSpl}</td></tr>
           <tr><td><b>Total Available</b></td><td><b>${cashSummary.totalAvailable}</b></td></tr>
           <tr><td>Wage (gross)</td><td>${cashSummary.grossWage}</td></tr>
           <tr><td>Staff Payments</td><td>${cashSummary.staffTotal}</td></tr>
           <tr><td>Other Expenses</td><td>${cashSummary.otherTotal}</td></tr>
-          <tr><td>Due (worker records)</td><td>${cashSummary.pattiTotal}</td></tr>
+          <tr><td>Advance (worker records)</td><td>${cashSummary.pattiTotal}</td></tr>
           <tr><td>Others (worker records)</td><td>${cashSummary.othersTotal}</td></tr>
           <tr><td><b>Total Outgo</b></td><td><b>${cashSummary.totalOutgo}</b></td></tr>
           <tr><td><b>Bal Cash</b></td><td><b>${cashSummary.balCash}</b></td></tr>`;
@@ -2925,8 +2910,8 @@
       html += `<div class="report-section"><h2>Company Ledger</h2>
         <table class="narrow-table"><tbody>
           <tr><td>OB</td><td>${l.ob}</td></tr>
-          <tr><td>Advance — CO</td><td>${l.advanceCO}</td></tr>
-          <tr><td>Advance — SP+Spl</td><td>${l.advanceSPSpl}</td></tr>
+          <tr><td>Deposit — CO</td><td>${l.advanceCO}</td></tr>
+          <tr><td>Deposit — SP+Spl</td><td>${l.advanceSPSpl}</td></tr>
           ${(l.incomeItems || []).filter((it) => it.amount > 0).map((it) => `<tr><td>${it.label}</td><td>${it.amount}</td></tr>`).join("")}
           <tr><td><b>Total Income</b></td><td><b>${l.totalIncome}</b></td></tr>
           <tr><td>Wage</td><td>${l.grossWage}</td></tr>
