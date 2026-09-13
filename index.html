@@ -312,6 +312,8 @@
             • <b>Expenses</b> — Date, Type, Label, Amount (Type: StaffPayment/OtherDaily/NonDaily/Income)<br>
             • <b>CompanyLedger</b> — Date, OB, AdvanceCO, AdvanceSPSpl, SaleIncome, TotalIncome, Total, GrossWage, StaffTotal, OtherTotal, NonDailyTotal, PattiTotal, TotalExpense, OthersTotal, CB<br>
             • <b>CashSummary</b> — Date, Day, CashInHand, AdvanceCO, AdvanceSPSpl, TotalAvailable, GrossWage, StaffTotal, OtherTotal, PattiTotal, OthersTotal, TotalOutgo, BalCash<br>
+            • <b>Stock</b> — Date, Item, Opening, Production, Sale, Short, Closing (Item: ORD or SPL)<br>
+            • <b>StockMovements</b> — Date, Item, Type, Label, Amount (Item: ORD/SPL, Type: Sale/Short)<br>
             (Date format: YYYY-MM-DD on every sheet)
           </p>
           <input type="file" id="import-file-input" accept=".csv,.xlsx,.xls">
@@ -1158,7 +1160,7 @@
 
     /* ================= Bulk import data-layer ================= */
 
-    let importData = { entries: [], expenses: [], ledger: [], cashSummary: [] };
+    let importData = { entries: [], expenses: [], ledger: [], cashSummary: [], stock: [], stockMovements: [] };
 
     function findSheet(wb, names) {
       const lowerMap = {};
@@ -1242,6 +1244,23 @@
         othersTotal: Number(field(r, "OthersTotal")) || 0, totalOutgo: Number(field(r, "TotalOutgo")) || 0,
         balCash: Number(field(r, "BalCash")) || 0,
       })).filter((r) => r.date);
+    }
+
+    function parseStockRows(rawRows) {
+      return rawRows.map((r) => ({
+        date: normalizeDateCell(field(r, "Date")), item: String(field(r, "Item") || "").trim(),
+        opening: Number(field(r, "Opening")) || 0, production: Number(field(r, "Production")) || 0,
+        sale: Number(field(r, "Sale")) || 0, short: Number(field(r, "Short")) || 0,
+        closing: Number(field(r, "Closing")) || 0,
+      })).filter((r) => r.date && r.item);
+    }
+
+    function parseStockMovementsRows(rawRows) {
+      return rawRows.map((r) => ({
+        date: normalizeDateCell(field(r, "Date")), item: String(field(r, "Item") || "").trim(),
+        type: String(field(r, "Type") || "").trim(), label: String(field(r, "Label") || "").trim(),
+        amount: Number(field(r, "Amount")) || 0,
+      })).filter((r) => r.date && r.item && r.type);
     }
 
     async function batchWriteAll(writes) {
@@ -2669,6 +2688,8 @@
           const expensesSheet = findSheet(wb, ["Expenses"]);
           const ledgerSheet = findSheet(wb, ["CompanyLedger", "Company Ledger"]);
           const cashSheet = findSheet(wb, ["CashSummary", "Cash Summary"]);
+          const stockSheet = findSheet(wb, ["Stock"]);
+          const stockMovementsSheet = findSheet(wb, ["StockMovements", "Stock Movements"]);
 
           const diagnostics = [];
           const rawFor = (sheet, label) => {
@@ -2680,23 +2701,28 @@
 
           // If none of the known sheet names matched, fall back to treating the first sheet as Entries
           // (keeps single-sheet CSV imports working as before).
-          if (!entriesSheet && !expensesSheet && !ledgerSheet && !cashSheet) {
+          if (!entriesSheet && !expensesSheet && !ledgerSheet && !cashSheet && !stockSheet && !stockMovementsSheet) {
             const rawRows = rawFor(wb.Sheets[wb.SheetNames[0]], "Sheet 1");
-            importData = { entries: parseEntriesRows(rawRows), expenses: [], ledger: [], cashSummary: [] };
+            importData = { entries: parseEntriesRows(rawRows), expenses: [], ledger: [], cashSummary: [], stock: [], stockMovements: [] };
           } else {
             const entriesRaw = rawFor(entriesSheet, "Entries");
             const expensesRaw = rawFor(expensesSheet, "Expenses");
             const ledgerRaw = rawFor(ledgerSheet, "CompanyLedger");
             const cashRaw = rawFor(cashSheet, "CashSummary");
+            const stockRaw = rawFor(stockSheet, "Stock");
+            const stockMovementsRaw = rawFor(stockMovementsSheet, "StockMovements");
             importData = {
               entries: parseEntriesRows(entriesRaw),
               expenses: parseExpensesRows(expensesRaw),
               ledger: parseLedgerRows(ledgerRaw),
               cashSummary: parseCashSummaryRows(cashRaw),
+              stock: parseStockRows(stockRaw),
+              stockMovements: parseStockMovementsRows(stockMovementsRaw),
             };
           }
 
-          const total = importData.entries.length + importData.expenses.length + importData.ledger.length + importData.cashSummary.length;
+          const total = importData.entries.length + importData.expenses.length + importData.ledger.length +
+            importData.cashSummary.length + importData.stock.length + importData.stockMovements.length;
           if (!total) {
             const diagHtml = diagnostics.length
               ? "<p style='font-size:11px; color:var(--ink-soft);'>Sheet(s) found but no rows recognized. Column headers detected: " +
@@ -2715,6 +2741,8 @@
               <li>Expenses: <b>${importData.expenses.length}</b> rows</li>
               <li>CompanyLedger: <b>${importData.ledger.length}</b> rows</li>
               <li>CashSummary: <b>${importData.cashSummary.length}</b> rows</li>
+              <li>Stock: <b>${importData.stock.length}</b> rows</li>
+              <li>StockMovements: <b>${importData.stockMovements.length}</b> rows</li>
             </ul>`;
           document.getElementById("import-confirm-btn").style.display = "";
           statusEl.textContent = "";
@@ -2727,7 +2755,8 @@
 
     window.confirmImport = async function () {
       const statusEl = document.getElementById("import-status");
-      const total = importData.entries.length + importData.expenses.length + importData.ledger.length + importData.cashSummary.length;
+      const total = importData.entries.length + importData.expenses.length + importData.ledger.length +
+        importData.cashSummary.length + importData.stock.length + importData.stockMovements.length;
       if (!total) return;
       statusEl.textContent = "Importing " + total + " rows...";
       try {
@@ -2736,11 +2765,13 @@
           importData.expenses.length ? fsBulkImportExpenses(importData.expenses) : 0,
           importData.ledger.length ? fsBulkImportLedger(importData.ledger) : 0,
           importData.cashSummary.length ? fsBulkImportCashSummary(importData.cashSummary) : 0,
+          importData.stock.length ? fsRestoreStock(importData.stock) : 0,
+          importData.stockMovements.length ? fsRestoreStockMovements(importData.stockMovements) : 0,
         ]);
-        statusEl.textContent = `✓ Imported — Entries: ${counts[0]}, Expenses (grouped): ${counts[1]}, CompanyLedger: ${counts[2]}, CashSummary: ${counts[3]}.`;
+        statusEl.textContent = `✓ Imported — Entries: ${counts[0]}, Expenses (grouped): ${counts[1]}, CompanyLedger: ${counts[2]}, CashSummary: ${counts[3]}, Stock: ${counts[4]}, StockMovements (grouped): ${counts[5]}.`;
         document.getElementById("import-confirm-btn").style.display = "none";
         document.getElementById("import-preview").innerHTML = "";
-        importData = { entries: [], expenses: [], ledger: [], cashSummary: [] };
+        importData = { entries: [], expenses: [], ledger: [], cashSummary: [], stock: [], stockMovements: [] };
       } catch (err) {
         statusEl.textContent = "Error: " + err.message;
       }
