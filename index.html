@@ -1162,56 +1162,86 @@
 
     function findSheet(wb, names) {
       const lowerMap = {};
-      wb.SheetNames.forEach((n) => (lowerMap[n.toLowerCase()] = n));
+      wb.SheetNames.forEach((n) => (lowerMap[n.trim().toLowerCase()] = n));
       for (const name of names) {
         if (lowerMap[name.toLowerCase()]) return wb.Sheets[lowerMap[name.toLowerCase()]];
       }
       return null;
     }
 
+    /**
+     * Column names in uploaded Excel files don't always match our expected
+     * headers byte-for-byte (extra spaces, different casing, etc. from manual
+     * typing). This builds a case/whitespace-insensitive lookup so `field(r,
+     * "Date")` finds a "Date", " date ", "DATE" column equally.
+     */
+    function field(row, name) {
+      const target = name.trim().toLowerCase();
+      for (const key of Object.keys(row)) {
+        if (key.trim().toLowerCase() === target) return row[key];
+      }
+      return undefined;
+    }
+
+    /** Normalizes a Date cell (which may come through as a JS Date object, an
+     * Excel serial number, or a plain string) into a "YYYY-MM-DD" string. */
+    function normalizeDateCell(v) {
+      if (v === undefined || v === null || v === "") return "";
+      if (v instanceof Date) {
+        return v.getFullYear() + "-" + String(v.getMonth() + 1).padStart(2, "0") + "-" + String(v.getDate()).padStart(2, "0");
+      }
+      const s = String(v).trim();
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+      const parsed = new Date(s);
+      if (!isNaN(parsed.getTime())) {
+        return parsed.getFullYear() + "-" + String(parsed.getMonth() + 1).padStart(2, "0") + "-" + String(parsed.getDate()).padStart(2, "0");
+      }
+      return s;
+    }
+
     function parseEntriesRows(rawRows) {
       return rawRows
-        .filter((r) => r.Date && r.Section && r.Number !== undefined && r.Number !== "")
         .map((r) => ({
-          date: String(r.Date).trim(), day: String(r.Day || "").trim(),
-          section: String(r.Section).trim(), number: String(r.Number).trim(),
-          beedi: Number(r.Beedi) || 0, advance: Number(r.Advance) || 0,
-          patti: Number(r.Patti) || 0, others: Number(r.Others) || 0,
-        }));
+          date: normalizeDateCell(field(r, "Date")), day: String(field(r, "Day") || "").trim(),
+          section: String(field(r, "Section") || "").trim(), number: String(field(r, "Number") ?? "").trim(),
+          beedi: Number(field(r, "Beedi")) || 0, advance: Number(field(r, "Advance")) || 0,
+          patti: Number(field(r, "Patti")) || 0, others: Number(field(r, "Others")) || 0,
+        }))
+        .filter((r) => r.date && r.section && r.number !== "");
     }
 
     function parseExpensesRows(rawRows) {
       return rawRows
-        .filter((r) => r.Date && r.Type)
         .map((r) => ({
-          date: String(r.Date).trim(), type: String(r.Type).trim(),
-          label: String(r.Label || "").trim(), amount: Number(r.Amount) || 0,
-        }));
+          date: normalizeDateCell(field(r, "Date")), type: String(field(r, "Type") || "").trim(),
+          label: String(field(r, "Label") || "").trim(), amount: Number(field(r, "Amount")) || 0,
+        }))
+        .filter((r) => r.date && r.type);
     }
 
     function parseLedgerRows(rawRows) {
-      return rawRows.filter((r) => r.Date).map((r) => ({
-        date: String(r.Date).trim(), ob: Number(r.OB) || 0,
-        advanceCO: Number(r.AdvanceCO) || 0, advanceSPSpl: Number(r.AdvanceSPSpl) || 0,
-        saleIncome: Number(r.SaleIncome) || 0, totalIncome: Number(r.TotalIncome) || 0,
-        total: Number(r.Total) || 0, grossWage: Number(r.GrossWage) || 0,
-        staffTotal: Number(r.StaffTotal) || 0, otherTotal: Number(r.OtherTotal) || 0,
-        nonDailyTotal: Number(r.NonDailyTotal) || 0, pattiTotal: Number(r.PattiTotal) || 0,
-        totalExpense: Number(r.TotalExpense) || 0, othersTotal: Number(r.OthersTotal) || 0,
-        cb: Number(r.CB) || 0,
-      }));
+      return rawRows.map((r) => ({
+        date: normalizeDateCell(field(r, "Date")), ob: Number(field(r, "OB")) || 0,
+        advanceCO: Number(field(r, "AdvanceCO")) || 0, advanceSPSpl: Number(field(r, "AdvanceSPSpl")) || 0,
+        saleIncome: Number(field(r, "SaleIncome")) || 0, totalIncome: Number(field(r, "TotalIncome")) || 0,
+        total: Number(field(r, "Total")) || 0, grossWage: Number(field(r, "GrossWage")) || 0,
+        staffTotal: Number(field(r, "StaffTotal")) || 0, otherTotal: Number(field(r, "OtherTotal")) || 0,
+        nonDailyTotal: Number(field(r, "NonDailyTotal")) || 0, pattiTotal: Number(field(r, "PattiTotal")) || 0,
+        totalExpense: Number(field(r, "TotalExpense")) || 0, othersTotal: Number(field(r, "OthersTotal")) || 0,
+        cb: Number(field(r, "CB")) || 0,
+      })).filter((r) => r.date);
     }
 
     function parseCashSummaryRows(rawRows) {
-      return rawRows.filter((r) => r.Date).map((r) => ({
-        date: String(r.Date).trim(), day: String(r.Day || "").trim(),
-        cashInHand: Number(r.CashInHand) || 0, advanceCO: Number(r.AdvanceCO) || 0,
-        advanceSPSpl: Number(r.AdvanceSPSpl) || 0, totalAvailable: Number(r.TotalAvailable) || 0,
-        grossWage: Number(r.GrossWage) || 0, staffTotal: Number(r.StaffTotal) || 0,
-        otherTotal: Number(r.OtherTotal) || 0, pattiTotal: Number(r.PattiTotal) || 0,
-        othersTotal: Number(r.OthersTotal) || 0, totalOutgo: Number(r.TotalOutgo) || 0,
-        balCash: Number(r.BalCash) || 0,
-      }));
+      return rawRows.map((r) => ({
+        date: normalizeDateCell(field(r, "Date")), day: String(field(r, "Day") || "").trim(),
+        cashInHand: Number(field(r, "CashInHand")) || 0, advanceCO: Number(field(r, "AdvanceCO")) || 0,
+        advanceSPSpl: Number(field(r, "AdvanceSPSpl")) || 0, totalAvailable: Number(field(r, "TotalAvailable")) || 0,
+        grossWage: Number(field(r, "GrossWage")) || 0, staffTotal: Number(field(r, "StaffTotal")) || 0,
+        otherTotal: Number(field(r, "OtherTotal")) || 0, pattiTotal: Number(field(r, "PattiTotal")) || 0,
+        othersTotal: Number(field(r, "OthersTotal")) || 0, totalOutgo: Number(field(r, "TotalOutgo")) || 0,
+        balCash: Number(field(r, "BalCash")) || 0,
+      })).filter((r) => r.date);
     }
 
     async function batchWriteAll(writes) {
@@ -2640,23 +2670,39 @@
           const ledgerSheet = findSheet(wb, ["CompanyLedger", "Company Ledger"]);
           const cashSheet = findSheet(wb, ["CashSummary", "Cash Summary"]);
 
+          const diagnostics = [];
+          const rawFor = (sheet, label) => {
+            if (!sheet) return [];
+            const rows = XLSX.utils.sheet_to_json(sheet, { defval: "", raw: false });
+            if (rows.length) diagnostics.push({ label, headers: Object.keys(rows[0]) });
+            return rows;
+          };
+
           // If none of the known sheet names matched, fall back to treating the first sheet as Entries
           // (keeps single-sheet CSV imports working as before).
           if (!entriesSheet && !expensesSheet && !ledgerSheet && !cashSheet) {
-            const rawRows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: "", raw: false });
+            const rawRows = rawFor(wb.Sheets[wb.SheetNames[0]], "Sheet 1");
             importData = { entries: parseEntriesRows(rawRows), expenses: [], ledger: [], cashSummary: [] };
           } else {
+            const entriesRaw = rawFor(entriesSheet, "Entries");
+            const expensesRaw = rawFor(expensesSheet, "Expenses");
+            const ledgerRaw = rawFor(ledgerSheet, "CompanyLedger");
+            const cashRaw = rawFor(cashSheet, "CashSummary");
             importData = {
-              entries: entriesSheet ? parseEntriesRows(XLSX.utils.sheet_to_json(entriesSheet, { defval: "", raw: false })) : [],
-              expenses: expensesSheet ? parseExpensesRows(XLSX.utils.sheet_to_json(expensesSheet, { defval: "", raw: false })) : [],
-              ledger: ledgerSheet ? parseLedgerRows(XLSX.utils.sheet_to_json(ledgerSheet, { defval: "", raw: false })) : [],
-              cashSummary: cashSheet ? parseCashSummaryRows(XLSX.utils.sheet_to_json(cashSheet, { defval: "", raw: false })) : [],
+              entries: parseEntriesRows(entriesRaw),
+              expenses: parseExpensesRows(expensesRaw),
+              ledger: parseLedgerRows(ledgerRaw),
+              cashSummary: parseCashSummaryRows(cashRaw),
             };
           }
 
           const total = importData.entries.length + importData.expenses.length + importData.ledger.length + importData.cashSummary.length;
           if (!total) {
-            previewEl.innerHTML = "<p>No valid rows found. Check that sheet names / columns are exactly right.</p>";
+            const diagHtml = diagnostics.length
+              ? "<p style='font-size:11px; color:var(--ink-soft);'>Sheet(s) found but no rows recognized. Column headers detected: " +
+                diagnostics.map((d) => "<br><b>" + d.label + "</b>: " + d.headers.join(", ")).join("") + "</p>"
+              : "";
+            previewEl.innerHTML = "<p>No valid rows found. Check that sheet names / columns are exactly right.</p>" + diagHtml;
             document.getElementById("import-confirm-btn").style.display = "none";
             statusEl.textContent = "";
             return;
