@@ -826,7 +826,8 @@
         if (beedi > 0 || advance > 0) totalDays += 1;
       });
       const balance = totalPatti - totalAdvance;
-      const last = rows.length ? rows[rows.length - 1] : null;
+      const workingRows = rows.filter((r) => (Number(r.beedi) || 0) > 0 || (Number(r.advance) || 0) > 0);
+      const last = workingRows.length ? workingRows[workingRows.length - 1] : null;
       const name = lookupWorkerName(names, pool, number);
       return { pool, number: String(number), name, totalDays, totalBeedi, totalKooli, totalPatti, totalAdvance, balance, last };
     }
@@ -2811,6 +2812,20 @@
       reader.readAsBinaryString(file);
     };
 
+    function synthesizeStockMovements(stockRows, existingMovements) {
+      const covered = new Set(existingMovements.map((m) => m.date + "|" + m.item + "|" + m.type));
+      const synthesized = [];
+      stockRows.forEach((r) => {
+        if (r.sale > 0 && !covered.has(r.date + "|" + r.item + "|Sale")) {
+          synthesized.push({ date: r.date, item: r.item, type: "Sale", label: "Bulk Import", amount: r.sale });
+        }
+        if (r.short > 0 && !covered.has(r.date + "|" + r.item + "|Short")) {
+          synthesized.push({ date: r.date, item: r.item, type: "Short", label: "Bulk Import", amount: r.short });
+        }
+      });
+      return synthesized;
+    }
+
     window.confirmImport = async function () {
       const statusEl = document.getElementById("import-status");
       const total = importData.entries.length + importData.expenses.length + importData.ledger.length +
@@ -2818,13 +2833,19 @@
       if (!total) return;
       statusEl.textContent = "Importing " + total + " rows...";
       try {
+        // The Stock tab and Home page read itemized Sale/Short from StockMovements,
+        // not from Stock's own aggregate sale/short numbers — if only the Stock
+        // sheet was provided, synthesize matching itemized entries so they agree.
+        const allMovements = importData.stockMovements.concat(
+          synthesizeStockMovements(importData.stock, importData.stockMovements)
+        );
         const counts = await Promise.all([
           importData.entries.length ? fsBulkImportEntries(importData.entries) : 0,
           importData.expenses.length ? fsBulkImportExpenses(importData.expenses) : 0,
           importData.ledger.length ? fsBulkImportLedger(importData.ledger) : 0,
           importData.cashSummary.length ? fsBulkImportCashSummary(importData.cashSummary) : 0,
           importData.stock.length ? fsRestoreStock(importData.stock) : 0,
-          importData.stockMovements.length ? fsRestoreStockMovements(importData.stockMovements) : 0,
+          allMovements.length ? fsRestoreStockMovements(allMovements) : 0,
         ]);
         statusEl.textContent = `✓ Imported — Entries: ${counts[0]}, Expenses (grouped): ${counts[1]}, CompanyLedger: ${counts[2]}, CashSummary: ${counts[3]}, Stock: ${counts[4]}, StockMovements (grouped): ${counts[5]}.`;
         document.getElementById("import-confirm-btn").style.display = "none";
