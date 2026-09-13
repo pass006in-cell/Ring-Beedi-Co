@@ -359,6 +359,20 @@
       <div class="card">
         <div class="card-head" style="border-left-color: var(--rule);">Delete Data (⚠️ Careful)</div>
         <div style="padding: 10px;">
+          <div class="expense-title">Delete a single worker's entry (one date)</div>
+          <p style="font-size:11.5px; color:var(--ink-soft); margin-top:-4px;">
+            To delete a single accidental/wrong entry — the rest of that day's data stays unaffected.
+          </p>
+          <div class="day-picker" style="margin-bottom:14px; flex-wrap:wrap;">
+            <input type="date" id="delete-entry-date">
+            <select id="delete-entry-section" style="padding:6px; border:1px solid #C8D3C9; border-radius:3px; font-family:inherit; font-size:13px;">
+              <option value="CO">CO</option>
+              <option value="Spl">Spl</option>
+              <option value="SP">SP</option>
+            </select>
+            <input type="text" id="delete-entry-number" placeholder="Worker No." style="width:90px; padding:6px; border:1px solid #C8D3C9; border-radius:3px;">
+            <button class="action-btn" onclick="deleteSingleEntry()" style="border-color:var(--rule); color:var(--rule);">Delete Entry</button>
+          </div>
           <div class="expense-title">Delete an entire day's data</div>
           <div class="day-picker" style="margin-bottom:14px;">
             <input type="date" id="delete-single-date">
@@ -539,6 +553,16 @@
       const dd = String(parts[2]).padStart(2, "0");
       const dayName = weekdayName(dateStr).toUpperCase();
       return dd + "-" + months[parts[1] - 1] + "-" + parts[0] + " - " + dayName;
+    }
+
+    /** Compact DD-MMM-YY display (e.g. "22-Jun-26") for dates shown in table
+     * listings/history rows. Storage/sorting internally stays YYYY-MM-DD. */
+    function dispDate(dateStr) {
+      const s = String(dateStr || "");
+      const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (!m) return s;
+      const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      return m[3] + "-" + months[Number(m[2]) - 1] + "-" + m[1].slice(2);
     }
 
     function bz(v) {
@@ -1151,6 +1175,10 @@
     }
 
     /* ================= Delete data-layer ================= */
+
+    async function fsDeleteSingleEntry(dateStr, section, number) {
+      await deleteDoc(doc(db, "entries", dateStr + "__" + section + "__" + number));
+    }
 
     async function fsDeleteDayData(dateStr) {
       const deletes = [];
@@ -2207,7 +2235,7 @@
           <div class="field-row"><span>OB (period start)</span><span class="num">${data.periodOB}</span></div>
           <div class="field-row"><span>Deposit CO</span><span class="num">${data.advanceCO}</span></div>
           <div class="field-row"><span>Deposit SP+Spl</span><span class="num">${data.advanceSPSpl}</span></div>
-          ${data.incomeList.map((it) => `<div class="field-row"><span>${it.date} — ${it.label}</span><span class="num">${it.amount}</span></div>`).join("")}
+          ${data.incomeList.map((it) => `<div class="field-row"><span>${dispDate(it.date)} — ${it.label}</span><span class="num">${it.amount}</span></div>`).join("")}
           <div class="field-row"><b>Total Income</b><b class="num">${data.expenseTotals.Income + data.advanceCO + data.advanceSPSpl}</b></div>
         </div>
 
@@ -2215,7 +2243,7 @@
           <div class="field-row"><span>Wage (Total)</span><span class="num">${data.grossWage}</span></div>
           ${Object.keys(data.staffByLabel).map((k) => `<div class="field-row"><span>${k}</span><span class="num">${data.staffByLabel[k]}</span></div>`).join("")}
           ${Object.keys(data.otherByLabel).map((k) => `<div class="field-row"><span>${k}</span><span class="num">${data.otherByLabel[k]}</span></div>`).join("")}
-          ${data.nonDailyList.map((it) => `<div class="field-row"><span>${it.date} — ${it.label}</span><span class="num">${it.amount}</span></div>`).join("")}
+          ${data.nonDailyList.map((it) => `<div class="field-row"><span>${dispDate(it.date)} — ${it.label}</span><span class="num">${it.amount}</span></div>`).join("")}
           <div class="field-row"><span>Advance (Total)</span><span class="num">${data.pattiTotal}</span></div>
           <div class="field-row"><b>Total Expense</b><b class="num">${totalExpense}</b></div>
         </div>
@@ -2255,7 +2283,7 @@
       const dayRows = rows.map((r) => {
         const opB = toBundles(r.opening), prB = toBundles(r.production), saB = toBundles(r.sale), shB = toBundles(r.short), clB = toBundles(r.closing);
         return `<tr>
-          <td>${r.date} (${weekdayName(r.date)})</td>
+          <td>${dispDate(r.date)} (${weekdayName(r.date)})</td>
           <td>${opB.b}b ${opB.r}k</td>
           <td>${prB.b}b ${prB.r}k</td>
           <td>${saB.b}b ${saB.r}k</td>
@@ -2319,7 +2347,7 @@
             return `<tr class="due-hist-${myIdx} due-hist-row" style="display:none;"><td colspan="2">${item}</td><td>${it.beedi}</td><td>${it.kooli}</td><td>${it.advance}</td><td>${it.patti}</td><td>${it.others}</td><td>${it.days}</td><td></td></tr>`;
           }).join("");
           const historyRows = w.history.map((h) =>
-            `<tr class="due-hist-${myIdx} due-hist-row" style="display:none;"><td colspan="2">${h.date} (${h.item})</td><td>${h.beedi || 0}</td><td>${h.kooli || 0}</td><td>${h.advance || 0}</td><td>${h.patti || 0}</td><td>${h.others || 0}</td><td></td><td></td></tr>`
+            `<tr class="due-hist-${myIdx} due-hist-row" style="display:none;"><td colspan="2">${dispDate(h.date)} (${h.item})</td><td>${h.beedi || 0}</td><td>${h.kooli || 0}</td><td>${h.advance || 0}</td><td>${h.patti || 0}</td><td>${h.others || 0}</td><td></td><td></td></tr>`
           ).join("");
           return `<tr>
               <td>${w.section}</td><td><button class="add-row-btn" style="font-weight:bold; text-decoration:underline; padding:0;" onclick="showWorkerLedger('${w.section}','${w.number}')">${w.number}</button>${w.name ? ' <span style="color:var(--ink-soft); font-size:11px;">(' + w.name + ')</span>' : ''}</td>
@@ -2356,7 +2384,7 @@
       if (!w) return;
 
       const rows = w.history.map((h) =>
-        `<tr><td>${h.date}</td><td>${h.item}</td><td>${h.beedi || 0}</td><td>${h.kooli || 0}</td><td>${h.advance || 0}</td><td>${h.balance || 0}</td><td>${h.patti || 0}</td><td>${h.others || 0}</td></tr>`
+        `<tr><td>${dispDate(h.date)}</td><td>${h.item}</td><td>${h.beedi || 0}</td><td>${h.kooli || 0}</td><td>${h.advance || 0}</td><td>${h.balance || 0}</td><td>${h.patti || 0}</td><td>${h.others || 0}</td></tr>`
       ).join("");
 
       const html = `
@@ -2397,7 +2425,7 @@
           const receivable = w.net > 0 ? w.net : 0;
           sub.patti += w.pattiTotal; sub.advance += w.advanceTotal; sub.payable += payable; sub.receivable += receivable;
           const myIdx = idx++;
-          const historyRows = w.history.map((h) => `<tr class="due-hist-${myIdx}" style="display:none;"><td colspan="2">${h.date} <span style="color:var(--ink-soft); font-size:10px;">(${h.section})</span></td><td>${h.patti || ""}</td><td>${h.advance || ""}</td><td></td><td></td><td></td></tr>`).join("");
+          const historyRows = w.history.map((h) => `<tr class="due-hist-${myIdx}" style="display:none;"><td colspan="2">${dispDate(h.date)} <span style="color:var(--ink-soft); font-size:10px;">(${h.section})</span></td><td>${h.patti || ""}</td><td>${h.advance || ""}</td><td></td><td></td><td></td></tr>`).join("");
           return `<tr>
               <td>${w.section}</td><td>${w.number}${w.name ? ' <span style="color:var(--ink-soft); font-size:10px;">(' + w.name + ')</span>' : ''}</td><td>${w.pattiTotal}</td><td>${w.advanceTotal}</td>
               <td class="report-net-neg">${payable || ""}</td><td class="report-net-pos">${receivable || ""}</td>
@@ -2971,6 +2999,23 @@
       }
     };
 
+    window.deleteSingleEntry = async function () {
+      const date = document.getElementById("delete-entry-date").value;
+      const section = document.getElementById("delete-entry-section").value;
+      const number = document.getElementById("delete-entry-number").value.trim();
+      const statusEl = document.getElementById("delete-status");
+      if (!date || !number) { statusEl.textContent = "Please pick a date and enter a worker number"; return; }
+      if (!confirm(date + " — " + section + " " + number + "'s entry — delete it? This cannot be undone.")) return;
+      statusEl.textContent = "Deleting...";
+      try {
+        await fsDeleteSingleEntry(date, section, number);
+        statusEl.textContent = "✓ " + date + " — " + section + " " + number + "'s entry deleted.";
+        document.getElementById("delete-entry-number").value = "";
+      } catch (err) {
+        statusEl.textContent = "Error: " + err.message;
+      }
+    };
+
     window.deleteSingleDay = async function () {
       const date = document.getElementById("delete-single-date").value;
       const statusEl = document.getElementById("delete-status");
@@ -3013,8 +3058,8 @@
         root.innerHTML = `
           <div class="card">
             <div class="card-head" style="border-left-color: var(--accent-spl);">Item-wise Today's Stock</div>
-            <div class="field-row"><span>ORD</span><span class="num readonly">${ordB ? ordB.b + " bundle, " + ordB.r + " kettu (as of " + summary.stockByItem.ORD.date + ")" : "No data yet"}</span></div>
-            <div class="field-row"><span>SPL</span><span class="num readonly">${splB ? splB.b + " bundle, " + splB.r + " kettu (as of " + summary.stockByItem.SPL.date + ")" : "No data yet"}</span></div>
+            <div class="field-row"><span>ORD</span><span class="num readonly">${ordB ? ordB.b + " bundle, " + ordB.r + " kettu (as of " + dispDate(summary.stockByItem.ORD.date) + ")" : "No data yet"}</span></div>
+            <div class="field-row"><span>SPL</span><span class="num readonly">${splB ? splB.b + " bundle, " + splB.r + " kettu (as of " + dispDate(summary.stockByItem.SPL.date) + ")" : "No data yet"}</span></div>
           </div>
           <div class="card">
             <div class="card-head" style="border-left-color: var(--accent-sp);">Last Sale</div>
@@ -3023,14 +3068,14 @@
                 const s = summary.lastStockSale[item];
                 if (!s) return `<div class="field-row"><span>${item}</span><span style="font-size:12px; color:var(--ink-soft);">No sale recorded yet</span></div>`;
                 const b = toBundles(s.qty);
-                return `<div class="field-row"><span>${item} sale qty (${s.date})</span><span class="num readonly">${b.b} bundle, ${b.r} kettu</span></div>`;
+                return `<div class="field-row"><span>${item} sale qty (${dispDate(s.date)})</span><span class="num readonly">${b.b} bundle, ${b.r} kettu</span></div>`;
               }).join("")}
             </div>
           </div>
           <div class="card">
             <div class="card-head" style="border-left-color: var(--rule);">Cash Balance</div>
             <div class="tally ${summary.cashBalance && summary.cashBalance.cb >= 0 ? 'balanced' : ''}">
-              ${summary.cashBalance ? "CB: " + summary.cashBalance.cb + " (as of " + summary.cashBalance.date + ")" : "No Company Ledger data yet"}
+              ${summary.cashBalance ? "CB: " + summary.cashBalance.cb + " (as of " + dispDate(summary.cashBalance.date) + ")" : "No Company Ledger data yet"}
             </div>
           </div>
         `;
