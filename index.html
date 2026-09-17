@@ -48,10 +48,10 @@
     .field-row input { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; text-align: right; width: 100px; padding: 4px 6px; border: 1px solid #CBD8CC; border-radius: 3px; }
     .expense-block { padding: 6px 10px 10px 10px; }
     .expense-title { font-size: 11.5px; color: var(--ink-soft); margin-bottom: 4px; }
-    .expense-row { display: flex; gap: 6px; margin-bottom: 4px; }
-    .expense-row input.label { flex: 1.6; text-align: left; }
-    .expense-row input.amount { flex: 1; text-align: right; }
-    .expense-row input { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; padding: 4px; border: 1px solid #CBD8CC; border-radius: 3px; }
+    .expense-row { display: flex; gap: 4px; margin-bottom: 4px; }
+    .expense-row input.label { flex: 1 1 auto; min-width: 0; text-align: left; }
+    .expense-row input.amount { flex: 0 0 48px; width: 48px; min-width: 0; text-align: right; padding-left: 2px; padding-right: 2px; }
+    .expense-row input { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; padding: 4px; border: 1px solid #CBD8CC; border-radius: 3px; box-sizing: border-box; min-width: 0; }
     .add-row-btn { font-size: 12px; background: none; border: none; color: var(--ink-soft); cursor: pointer; padding: 4px 0; }
     .divider { border-top: 1px solid #D3DFD3; margin: 8px 10px; }
     .tally { margin: 8px 10px; padding: 10px; border-radius: 4px; text-align: center; font-weight: bold; border: 2px solid var(--rule); color: var(--rule); }
@@ -81,6 +81,9 @@
     .report-table th, .report-table td { padding: 3px 5px; text-align: right; border-bottom: 1px solid #E3E9E3; }
     .report-table th:first-child, .report-table td:first-child { text-align: left; }
     .report-table th { color: var(--ink-soft); font-size: 10.5px; }
+    .report-table tbody tr:nth-child(even) { background: #EEF3EC; }
+    .report-table td.stock-closing { font-weight: bold; background: #FDF0C7; }
+    .report-table td.stock-short.has-value { color: var(--rule); font-weight: bold; }
     .report-net-pos { color: var(--rule); font-weight: bold; }
     .report-net-neg { color: var(--accent-spl); font-weight: bold; }
     .due-hist-row { background: #FFF6DD; }
@@ -1574,7 +1577,7 @@
           <div class="rows-scroll">
             <table>
               <thead><tr>
-                <th>No.</th><th>Beedi</th><th>Wage</th><th>Deposit</th><th>Balance</th><th>Advance</th><th>Others</th>
+                <th>No.</th><th>Beedi</th><th>Wage</th><th>Deposit</th><th>Balance</th><th>Advance</th>
               </tr></thead>
               <tbody id="tbody-${sec.key}"></tbody>
             </table>
@@ -1592,7 +1595,6 @@
             <td><input type="text" inputmode="numeric" value="${bz(r.advance)}" data-sec="${sec.key}" data-idx="${idx}" data-field="advance" oninput="onCellInput(this)"></td>
             <td class="readonly balance" id="balance-${sec.key}-${idx}">${bz(r.balance)}</td>
             <td><input type="text" inputmode="numeric" value="${bz(r.patti)}" data-sec="${sec.key}" data-idx="${idx}" data-field="patti" oninput="onCellInput(this)"></td>
-            <td><input type="text" inputmode="numeric" value="${bz(r.others)}" data-sec="${sec.key}" data-idx="${idx}" data-field="others" oninput="onCellInput(this)"></td>
           `;
           tbody.appendChild(tr);
         });
@@ -1697,7 +1699,7 @@
     function buildEntrySummaryRows(sec) {
       return (entriesData[sec.key] || [])
         .filter((r) => (Number(r.beedi) || 0) > 0 || (Number(r.advance) || 0) > 0 || (Number(r.patti) || 0) > 0 || (Number(r.others) || 0) !== 0)
-        .map((r) => `<tr><td>${r.number}</td><td class="num">${r.beedi || 0}</td><td class="num">${r.kooli || 0}</td><td class="num">${r.advance || 0}</td><td class="num">${r.balance || 0}</td><td class="num">${r.patti || 0}</td><td class="num">${r.others || 0}</td></tr>`)
+        .map((r) => `<tr><td>${r.number}</td><td class="num">${r.beedi || 0}</td><td class="num">${r.kooli || 0}</td><td class="num">${r.advance || 0}</td><td class="num">${r.balance || 0}</td><td class="num">${r.patti || 0}</td></tr>`)
         .join("");
     }
 
@@ -1709,7 +1711,7 @@
         if (!rows) return;
         html += `<div style="margin-top:8px;"><b>${sec.label}</b></div>
           <table style="width:100%; margin-bottom:6px;">
-            <tr><th>No.</th><th>Beedi</th><th>Wage</th><th>Deposit</th><th>Balance</th><th>Advance</th><th>Others</th></tr>
+            <tr><th>No.</th><th>Beedi</th><th>Wage</th><th>Deposit</th><th>Balance</th><th>Advance</th></tr>
             ${rows}
           </table>`;
       });
@@ -2290,20 +2292,22 @@
       const body = document.getElementById("report-body");
       let html = `<h1>${item} Stock Book — ${formatHeadingDate(start).split(" - ")[0]} → ${formatHeadingDate(end).split(" - ")[0]}</h1>`;
 
+      const fmtBK = (bk) => `${bk.b} b · ${bk.r} k`;
+
       const dayRows = rows.map((r) => {
         const opB = toBundles(r.opening), prB = toBundles(r.production), saB = toBundles(r.sale), shB = toBundles(r.short), clB = toBundles(r.closing);
         return `<tr>
-          <td>${dispDate(r.date)} (${weekdayName(r.date)})</td>
-          <td>${opB.b}b ${opB.r}k</td>
-          <td>${prB.b}b ${prB.r}k</td>
-          <td>${saB.b}b ${saB.r}k</td>
-          <td>${shB.b}b ${shB.r}k</td>
-          <td>${clB.b}b ${clB.r}k</td>
+          <td>${dispDate(r.date)}<br><span style="color:var(--ink-soft); font-size:10.5px;">${weekdayName(r.date)}</span></td>
+          <td>${fmtBK(opB)}</td>
+          <td>${fmtBK(prB)}</td>
+          <td>${fmtBK(saB)}</td>
+          <td class="stock-short${Number(r.short) > 0 ? " has-value" : ""}">${fmtBK(shB)}</td>
+          <td class="stock-closing">${fmtBK(clB)}</td>
         </tr>`;
       }).join("");
 
       html += `<div class="report-section"><h2>Day-wise</h2>
-        <table class="report-table"><thead><tr><th>Date (Day)</th><th>Opening</th><th>Production</th><th>Sale</th><th>Short</th><th>Closing</th></tr></thead><tbody>
+        <table class="report-table"><thead><tr><th>Date</th><th>Opening</th><th>Production</th><th>Sale</th><th>Short</th><th>Closing</th></tr></thead><tbody>
         ${dayRows || '<tr><td colspan="6">No stock data saved for this period.</td></tr>'}
         </tbody></table></div>`;
 
@@ -2315,11 +2319,11 @@
         const opB = toBundles(first.opening), clB = toBundles(last.closing);
         const prB = toBundles(totalProduction), saB = toBundles(totalSale), shB = toBundles(totalShort);
         html += `<div class="card"><div class="card-head" style="border-left-color: var(--rule);">Period Summary</div>
-          <div class="field-row"><span>Opening (period start)</span><span class="num">${opB.b} bundle, ${opB.r} kettu</span></div>
-          <div class="field-row"><span>Production (Total)</span><span class="num">${prB.b} bundle, ${prB.r} kettu</span></div>
-          <div class="field-row"><span>Sale (Total)</span><span class="num">${saB.b} bundle, ${saB.r} kettu</span></div>
-          <div class="field-row"><span>Short (Total)</span><span class="num">${shB.b} bundle, ${shB.r} kettu</span></div>
-          <div class="field-row"><b>Closing (period end)</b><b class="num">${clB.b} bundle, ${clB.r} kettu</b></div>
+          <div class="field-row highlight"><b>Opening (period start)</b><b class="num">${fmtBK(opB)}</b></div>
+          <div class="field-row"><span>Production (Total)</span><span class="num">${fmtBK(prB)}</span></div>
+          <div class="field-row"><span>Sale (Total)</span><span class="num">${fmtBK(saB)}</span></div>
+          <div class="field-row"><span>Short (Total)</span><span class="num">${fmtBK(shB)}</span></div>
+          <div class="field-row highlight"><b>Closing (period end)</b><b class="num">${fmtBK(clB)}</b></div>
         </div>`;
       }
 
@@ -3138,9 +3142,9 @@
         : `<div style="padding:4px 10px; font-size:12px; color:var(--ink-soft);">None</div>`;
       const staffItemsForDate = (expenses && expenses.StaffPayment) || [];
 
-      html += `<div class="card"><div class="card-head" style="border-left-color: var(--rule);">Daily Cash Account</div>`;
+      let cashAccountHtml = `<div class="card"><div class="card-head" style="border-left-color: var(--rule);">Daily Cash Account</div>`;
       if (cashSummary) {
-        html += `
+        cashAccountHtml += `
           <div class="field-row"><span>PTS CASH</span><span class="num">${cashSummary.cashInHand}</span></div>
           <div class="field-row"><span>Deposit — CO</span><span class="num">${cashSummary.advanceCO}</span></div>
           <div class="field-row"><span>Deposit — SP + Spl</span><span class="num">${cashSummary.advanceSPSpl}</span></div>
@@ -3157,11 +3161,11 @@
           <div class="field-row highlight"><b>Total Payment</b><b class="num">${cashSummary.totalOutgo}</b></div>
           <div class="field-row"><b>Bal Cash</b><b class="num">${cashSummary.balCash}</b></div>`;
       } else {
-        html += `<div style="padding:8px 10px; font-size:13px; color:var(--ink-soft);">Daily cash account not saved for this date yet.</div>`;
+        cashAccountHtml += `<div style="padding:8px 10px; font-size:13px; color:var(--ink-soft);">Daily cash account not saved for this date yet.</div>`;
       }
-      html += `</div>`;
+      cashAccountHtml += `</div>`;
 
-      html += `<div class="card"><div class="card-head" style="border-left-color: var(--rule);">Company Ledger</div>
+      const companyLedgerHtml = `<div class="card"><div class="card-head" style="border-left-color: var(--rule);">Company Ledger</div>
           <div class="field-row highlight"><b>Old Balance</b><b class="num">${l.ob}</b></div>
           <div class="field-row"><span>Deposit — CO</span><span class="num">${l.advanceCO}</span></div>
           <div class="field-row"><span>Deposit — SP+Spl</span><span class="num">${l.advanceSPSpl}</span></div>
@@ -3176,20 +3180,21 @@
           <div class="field-row highlight"><b>Cash Balance</b><b class="num">${l.closingBalance}</b></div>
         </div>`;
 
+      let productionHtml = "", stockBalanceHtml = "";
       if (stock) {
         const items = [
           { key: "ORD", label: "ORD", accent: "var(--accent-co)" },
           { key: "SPL", label: "SPL", accent: "var(--accent-spl)" },
         ];
-        html += `<div class="card"><div class="card-head" style="border-left-color: var(--rule);">Today Production (item wise)</div>`;
+        productionHtml = `<div class="card"><div class="card-head" style="border-left-color: var(--rule);">Today Production (item wise)</div>`;
         items.forEach((it) => {
           const d = stock[it.key] || {};
           const b = toBundles(d.production || 0);
-          html += `<div class="field-row"><span>${it.label}</span><span class="num">${b.b} bundle, ${b.r} kettu</span></div>`;
+          productionHtml += `<div class="field-row"><span>${it.label}</span><span class="num">${b.b} bundle, ${b.r} kettu</span></div>`;
         });
-        html += `</div>`;
+        productionHtml += `</div>`;
 
-        html += `<div class="card"><div class="card-head" style="border-left-color: var(--rule);">Stock Balance (item wise)</div>`;
+        stockBalanceHtml = `<div class="card"><div class="card-head" style="border-left-color: var(--rule);">Stock Balance (item wise)</div>`;
         items.forEach((it) => {
           const d = stock[it.key] || {};
           const opening = Number(d.opening) || 0;
@@ -3198,11 +3203,12 @@
           const shortTotal = sumAmt(d.shortItems);
           const closing = opening + production - saleTotal - shortTotal;
           const cb = toBundles(closing);
-          html += `<div class="field-row"><span>${it.label}</span><span class="num">${cb.b} bundle, ${cb.r} kettu</span></div>`;
+          stockBalanceHtml += `<div class="field-row"><span>${it.label}</span><span class="num">${cb.b} bundle, ${cb.r} kettu</span></div>`;
         });
-        html += `</div>`;
+        stockBalanceHtml += `</div>`;
       }
 
+      html += cashAccountHtml + productionHtml + companyLedgerHtml + stockBalanceHtml;
       root.innerHTML = html;
     }
 
