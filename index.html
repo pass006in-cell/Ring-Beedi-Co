@@ -585,14 +585,23 @@
       const q = query(collection(db, "entries"), where("date", "==", dateStr));
       const snap = await getDocs(q);
       const byKey = {};
+      const foundNumbersBySection = { CO: [], Spl: [], SP: [] };
       snap.forEach((docSnap) => {
         const d = docSnap.data();
         byKey[d.section + "__" + d.number] = d;
+        if (foundNumbersBySection[d.section]) foundNumbersBySection[d.section].push(String(d.number));
       });
 
       const bySection = { CO: [], Spl: [], SP: [] };
       SECTIONS.forEach((sec) => {
-        bySection[sec.key] = sec.numbers.map((num) => {
+        // Union of Settings-registered numbers and any numbers actually found in
+        // the data for this date/section (e.g. from a bulk import that used a
+        // section/number combo not yet added to Settings) — so nothing silently
+        // disappears from Entry tab / Daily Report just because it wasn't
+        // pre-registered.
+        const extra = foundNumbersBySection[sec.key].filter((n) => !sec.numbers.includes(n));
+        const allNumbers = sec.numbers.concat(sortWorkerIds(extra));
+        bySection[sec.key] = allNumbers.map((num) => {
           const d = byKey[sec.key + "__" + num] || {};
           const beedi = d.beedi ?? "";
           const advance = d.advance ?? "";
@@ -3090,28 +3099,56 @@
       if (!date) return;
       root.innerHTML = "<p>Loading...</p>";
       try {
-        const [cashSummary, ledger] = await Promise.all([fsGetCashSummary(date), fsGetCompanyLedgerForDate(date)]);
-        renderHomeDayDetail(date, cashSummary, ledger);
+        const [cashSummary, ledger, stock, entriesBySection, expenses] = await Promise.all([
+          fsGetCashSummary(date), fsGetCompanyLedgerForDate(date), fsGetStockForDate(date),
+          fsGetEntriesForDate(date), fsGetExpensesForDate(date),
+        ]);
+        renderHomeDayDetail(date, cashSummary, ledger, stock, entriesBySection, expenses);
       } catch (err) {
         root.innerHTML = "<p>Error: " + err.message + "</p>";
       }
     };
 
-    function renderHomeDayDetail(date, cashSummary, l) {
+    // Per-worker "Advance" (patti) rows for a date, across all sections — used by
+    // the Home page's day-detail cards so worker-wise advance is visible there
+    // rather than only as a single lump total.
+    function workerAdvanceRows(entriesBySection) {
+      const rows = [];
+      SECTIONS.forEach((sec) => {
+        (entriesBySection[sec.key] || []).forEach((w) => {
+          const patti = Number(w.patti) || 0;
+          if (patti > 0) rows.push({ section: sec.key, number: w.number, patti });
+        });
+      });
+      return rows;
+    }
+
+    function renderHomeDayDetail(date, cashSummary, l, stock, entriesBySection, expenses) {
       const root = document.getElementById("home-day-detail");
       let html = `<h1>${formatHeadingDate(date)}</h1>`;
+
+      const itemRow = (it) => `<div class="field-row"><span>${it.label}</span><span class="num">${it.amount}</span></div>`;
+      const advanceRows = entriesBySection ? workerAdvanceRows(entriesBySection) : [];
+      const advanceRowsHtml = advanceRows.length
+        ? advanceRows.map((r) => `<div class="field-row"><span>${r.section} #${r.number}</span><span class="num">${r.patti}</span></div>`).join("")
+        : `<div style="padding:4px 10px; font-size:12px; color:var(--ink-soft);">None</div>`;
+      const staffItemsForDate = (expenses && expenses.StaffPayment) || [];
 
       html += `<div class="card"><div class="card-head" style="border-left-color: var(--rule);">Daily Cash Account</div>`;
       if (cashSummary) {
         html += `
-          <div class="field-row"><span>Cash in Hand</span><span class="num">${cashSummary.cashInHand}</span></div>
+          <div class="field-row"><span>PTS CASH</span><span class="num">${cashSummary.cashInHand}</span></div>
           <div class="field-row"><span>Deposit — CO</span><span class="num">${cashSummary.advanceCO}</span></div>
           <div class="field-row"><span>Deposit — SP + Spl</span><span class="num">${cashSummary.advanceSPSpl}</span></div>
           <div class="field-row"><b>Total Available</b><b class="num">${cashSummary.totalAvailable}</b></div>
-          <div class="field-row"><span>Wage (gross)</span><span class="num">${cashSummary.grossWage}</span></div>
-          <div class="field-row"><span>Staff Payments</span><span class="num">${cashSummary.staffTotal}</span></div>
+          <div class="field-row"><span>COOLIE (gross)</span><span class="num">${cashSummary.grossWage}</span></div>
+          <div class="expense-title" style="margin-top:6px;">Staff Payment</div>
+          ${staffItemsForDate.filter((it) => Number(it.amount) > 0).map(itemRow).join("") || `<div style="padding:4px 10px; font-size:12px; color:var(--ink-soft);">None</div>`}
+          <div class="field-row"><b>Staff Payment (Total)</b><b class="num">${cashSummary.staffTotal}</b></div>
           <div class="field-row"><span>Other Expenses</span><span class="num">${cashSummary.otherTotal}</span></div>
-          <div class="field-row"><span>Advance (worker records)</span><span class="num">${cashSummary.pattiTotal}</span></div>
+          <div class="expense-title" style="margin-top:6px;">Advance (worker records)</div>
+          ${advanceRowsHtml}
+          <div class="field-row"><b>Advance (Total)</b><b class="num">${cashSummary.pattiTotal}</b></div>
           <div class="field-row"><span>Others (worker records)</span><span class="num">${cashSummary.othersTotal}</span></div>
           <div class="field-row"><b>Total Outgo</b><b class="num">${cashSummary.totalOutgo}</b></div>
           <div class="field-row"><b>Bal Cash</b><b class="num">${cashSummary.balCash}</b></div>`;
@@ -3120,20 +3157,47 @@
       }
       html += `</div>`;
 
-      const itemRow = (it) => `<div class="field-row"><span>${it.label}</span><span class="num">${it.amount}</span></div>`;
       html += `<div class="card"><div class="card-head" style="border-left-color: var(--rule);">Company Ledger</div>
           <div class="field-row"><span>OB</span><span class="num">${l.ob}</span></div>
           <div class="field-row"><span>Deposit — CO</span><span class="num">${l.advanceCO}</span></div>
           <div class="field-row"><span>Deposit — SP+Spl</span><span class="num">${l.advanceSPSpl}</span></div>
           ${(l.incomeItems || []).filter((it) => it.amount > 0).map(itemRow).join("")}
           <div class="field-row"><b>Total Income</b><b class="num">${l.totalIncome}</b></div>
-          <div class="field-row"><span>Wage</span><span class="num">${l.grossWage}</span></div>
+          <div class="field-row"><span>COOLIE</span><span class="num">${l.grossWage}</span></div>
           ${(l.staffItems || []).filter((it) => it.amount > 0).map(itemRow).join("")}
           ${(l.otherItems || []).filter((it) => it.amount > 0).map(itemRow).join("")}
           ${(l.nonDailyItems || []).filter((it) => it.amount > 0).map(itemRow).join("")}
+          ${l.pattiTotal > 0 ? `<div class="expense-title" style="margin-top:6px;">Advance (worker records)</div>${advanceRowsHtml}<div class="field-row"><b>Advance (Total)</b><b class="num">${l.pattiTotal}</b></div>` : ""}
           <div class="field-row"><b>Total Expense</b><b class="num">${l.totalExpense}</b></div>
           <div class="field-row"><b>CB</b><b class="num">${l.closingBalance}</b></div>
         </div>`;
+
+      if (stock) {
+        const items = [
+          { key: "ORD", label: "ORD", accent: "var(--accent-co)" },
+          { key: "SPL", label: "SPL", accent: "var(--accent-spl)" },
+        ];
+        html += `<div class="card"><div class="card-head" style="border-left-color: var(--rule);">Today Production (item wise)</div>`;
+        items.forEach((it) => {
+          const d = stock[it.key] || {};
+          const b = toBundles(d.production || 0);
+          html += `<div class="field-row"><span>${it.label}</span><span class="num">${b.b} bundle, ${b.r} kettu</span></div>`;
+        });
+        html += `</div>`;
+
+        html += `<div class="card"><div class="card-head" style="border-left-color: var(--rule);">Stock Balance (item wise)</div>`;
+        items.forEach((it) => {
+          const d = stock[it.key] || {};
+          const opening = Number(d.opening) || 0;
+          const production = Number(d.production) || 0;
+          const saleTotal = sumAmt(d.saleItems);
+          const shortTotal = sumAmt(d.shortItems);
+          const closing = opening + production - saleTotal - shortTotal;
+          const cb = toBundles(closing);
+          html += `<div class="field-row"><span>${it.label}</span><span class="num">${cb.b} bundle, ${cb.r} kettu</span></div>`;
+        });
+        html += `</div>`;
+      }
 
       root.innerHTML = html;
     }
