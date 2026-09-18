@@ -834,13 +834,26 @@
       };
     }
 
+    // Company only works Monday and Thursday (see the Entry tab's day picker),
+    // so any date whose weekday isn't one of those is presumptively a stray
+    // entry (typo'd date, bad bulk-import row, etc.) rather than real activity.
+    function isWorkingWeekday(dateStr) {
+      const wd = weekdayName(dateStr);
+      return wd === "Monday" || wd === "Thursday";
+    }
+
     // "Ledger Check" diagnostic: finds why a Period Report's OB/Income/Expense/CB
-    // might not tally. Two checks over a date range —
+    // might not tally. Checks over a date range —
     //  1) dates that have Entry/Expense activity but no saved Company Ledger
     //     document (their numbers count in Period Report totals but were never
-    //     folded into the OB->CB chain), and
+    //     folded into the OB->CB chain) — flagged separately when they also fall
+    //     on a non-working weekday (likely a stray/erroneous entry to delete),
     //  2) dates where the saved Opening Balance doesn't match the previous saved
-    //     date's Cash Balance (usually a manual OB override breaking the chain).
+    //     date's Cash Balance (usually a manual OB override breaking the chain),
+    //  3) worker numbers that have real data (beedi/advance/patti) entered under
+    //     BOTH SP and Spl for the same date — since SP and Spl are the same
+    //     worker pool (identityPool), this double-books one person's wage into
+    //     that day's gross wage total, which is a common cause of (2).
     async function fsGetLedgerCheckReport(startDate, endDate) {
       const [entriesSnap, expensesSnap, ledgerSnap] = await Promise.all([
         getDocs(query(collection(db, "entries"), where("date", ">=", startDate), where("date", "<=", endDate))),
@@ -849,14 +862,18 @@
       ]);
 
       const activityDates = new Set();
-      entriesSnap.forEach((d) => activityDates.add(d.data().date));
-      expensesSnap.forEach((d) => activityDates.add(d.data().date));
+      const entriesRaw = [];
+      entriesSnap.forEach((d) => { const r = d.data(); activityDates.add(r.date); entriesRaw.push(r); });
+      const expensesRaw = [];
+      expensesSnap.forEach((d) => { const r = d.data(); activityDates.add(r.date); expensesRaw.push(r); });
 
       const ledgerDocs = ledgerSnap.docs.map((d) => d.data()).sort((a, b) => (a.date < b.date ? -1 : 1));
       const ledgerByDate = {};
       ledgerDocs.forEach((l) => { ledgerByDate[l.date] = l; });
 
-      const missingDates = Array.from(activityDates).filter((d) => !ledgerByDate[d]).sort();
+      const missingDatesAll = Array.from(activityDates).filter((d) => !ledgerByDate[d]).sort();
+      const missingDates = missingDatesAll.filter((d) => isWorkingWeekday(d));
+      const strayDates = missingDatesAll.filter((d) => !isWorkingWeekday(d));
 
       const chainBreaks = [];
       for (let i = 1; i < ledgerDocs.length; i++) {
@@ -867,10 +884,61 @@
         }
       }
 
+      // Double-booked: same worker number has real data under both SP and Spl
+      // on the same date (SP/Spl are meant to be one person, one row per day).
+      const byDateNumber = {};
+      entriesRaw.forEach((r) => {
+        if (r.section !== "SP" && r.section !== "Spl") return;
+        const hasData = (Number(r.beedi) || 0) > 0 || (Number(r.advance) || 0) > 0 || (Number(r.patti) || 0) > 0;
+        if (!hasData) return;
+        const key = r.date + "__" + r.number;
+        if (!byDateNumber[key]) byDateNumber[key] = { date: r.date, number: r.number };
+        byDateNumber[key][r.section] = r;
+      });
+      const doubleBooked = Object.values(byDateNumber)
+        .filter((row) => row.SP && row.Spl)
+        .map((row) => ({
+          date: row.date, number: row.number,
+          spBeedi: Number(row.SP.beedi) || 0, spKooli: Number(row.SP.kooli) || 0,
+          splBeedi: Number(row.Spl.beedi) || 0, splKooli: Number(row.Spl.kooli) || 0,
+        }))
+        .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : Number(a.number) - Number(b.number)));
+
+      // Duplicate-wage expense items: a manually-added or bulk-imported expense
+      // line literally labelled "കൂലി"/"Wage"/"Coolie" duplicates the app's own
+      // auto-computed Wage row (summed from Entries), double-subtracting that
+      // day's wage from cash — a common cause of Opening Balance breaks above.
+      const grossWageByDate = {};
+      entriesRaw.forEach((r) => { grossWageByDate[r.date] = (grossWageByDate[r.date] || 0) + (Number(r.kooli) || 0); });
+      const wageKeywordRe = /(കൂലി|coolie|wage)/i;
+      const duplicateWageItems = [];
+      expensesRaw.forEach((r) => {
+        (r.items || []).forEach((it) => {
+          const label = (it.label || "").trim();
+          if (!label || !wageKeywordRe.test(label)) return;
+          duplicateWageItems.push({
+            date: r.date, type: r.type, label, amount: Number(it.amount) || 0,
+            grossWage: grossWageByDate[r.date] || 0,
+          });
+        });
+      });
+      duplicateWageItems.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+
       return {
-        startDate, endDate, missingDates, chainBreaks,
+        startDate, endDate, missingDates, strayDates, chainBreaks, doubleBooked, duplicateWageItems,
         ledgerDatesCount: ledgerDocs.length, activityDatesCount: activityDates.size,
       };
+    }
+
+    // Removes one matching item from an expenses/{date}__{type} document — used
+    // to clear a stray duplicate-wage expense line found by Ledger Check.
+    async function fsRemoveExpenseItem(dateStr, type, label, amount) {
+      const ref = doc(db, "expenses", dateStr + "__" + type);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) return;
+      const data = snap.data();
+      const items = (data.items || []).filter((it) => !(it.label === label && Number(it.amount) === Number(amount)));
+      await setDoc(ref, { date: dateStr, type: type, items });
     }
 
     function identityPool(section) {
@@ -1921,7 +1989,10 @@
       const expenseCell = side === "expense"
         ? `<input class="amt" type="text" inputmode="numeric" value="${amount}" data-tag="${tag}" data-idx="${idx}" data-field="amount" oninput="onLedgerItemInput(this)">` : "";
       return `<tr>
-        <td><input class="desc" type="text" value="${label}" data-tag="${tag}" data-idx="${idx}" data-field="label" oninput="onLedgerItemInput(this)"></td>
+        <td style="display:flex; gap:4px; align-items:center;">
+          <input class="desc" type="text" value="${label}" data-tag="${tag}" data-idx="${idx}" data-field="label" oninput="onLedgerItemInput(this)">
+          <button type="button" title="Remove this line" onclick="removeLedgerItem('${tag}',${idx})" style="flex:0 0 auto; border:1px solid #CBD8CC; background:#fff; border-radius:3px; color:var(--rule); font-weight:bold; padding:2px 7px; cursor:pointer;">✕</button>
+        </td>
         <td>${incomeCell}</td><td>${expenseCell}</td>
       </tr>`;
     }
@@ -1998,6 +2069,16 @@
       const key = tag === "income" ? "incomeItems" : "nonDailyItems";
       ledgerData[key][idx][field] = el.value;
       if (field === "amount") recalcLedgerDisplay();
+    };
+
+    // Removes a wrongly-added/duplicated Income or (Non-Daily) Expense line
+    // entirely, rather than only zeroing its amount — needed to clean up items
+    // like a stray "കൂലി" expense line that duplicates the auto Wage row.
+    window.removeLedgerItem = function (tag, idx) {
+      const key = tag === "income" ? "incomeItems" : "nonDailyItems";
+      ledgerData[key].splice(idx, 1);
+      renderLedgerTable();
+      recalcLedgerDisplay();
     };
 
     function setLedgerStatus(msg) { document.getElementById("ledger-status").textContent = msg; }
@@ -2143,9 +2224,21 @@
     }
 
     function buildLedgerCheckWorkbook(wb, data) {
+      const stray = [["Non-Working-Day Dates (likely stray)"]];
+      (data.strayDates || []).forEach((d) => stray.push([d]));
+      addSheetFromAOA(wb, "StrayDates", stray);
+
       const missing = [["Missing Ledger Save Dates"]];
       data.missingDates.forEach((d) => missing.push([d]));
       addSheetFromAOA(wb, "MissingLedger", missing);
+
+      const dbl = [["Date", "Number", "SPBeedi", "SPWage", "SplBeedi", "SplWage"]];
+      (data.doubleBooked || []).forEach((r) => dbl.push([r.date, r.number, r.spBeedi, r.spKooli, r.splBeedi, r.splKooli]));
+      addSheetFromAOA(wb, "DoubleBooked", dbl);
+
+      const dupWage = [["Date", "List", "Label", "Amount", "DayWage"]];
+      (data.duplicateWageItems || []).forEach((it) => dupWage.push([it.date, it.type, it.label, it.amount, it.grossWage]));
+      addSheetFromAOA(wb, "DuplicateWageItems", dupWage);
 
       const breaks = [["Date", "PrevDate", "PrevCB", "ThisOB", "Diff"]];
       data.chainBreaks.forEach((b) => breaks.push([b.date, b.prevDate, b.prevCb, b.curOb, b.diff]));
@@ -2405,21 +2498,66 @@
       }
     };
 
+    window.deleteLedgerCheckDate = async function (dateStr) {
+      if (!confirm("Delete ALL data (entries, expenses, stock, ledger, cash) saved for " + dateStr + "? This cannot be undone.")) return;
+      await fsDeleteDayData(dateStr);
+      alert("Deleted " + dateStr + ".");
+      window.loadLedgerCheck();
+    };
+
+    window.deleteDuplicateWageItem = async function (dateStr, type, label, amount) {
+      if (!confirm(`Remove the expense line "${label}" (${amount}) from ${dateStr}'s ${type} list? After this, re-open that date's Entry/Company Ledger tab and Save again so the day's totals recompute correctly.`)) return;
+      await fsRemoveExpenseItem(dateStr, type, label, amount);
+      alert("Removed. Now re-open " + dateStr + " in the Entry or Company Ledger tab and Save to fix that day's totals.");
+      window.loadLedgerCheck();
+    };
+
     function renderLedgerCheckReport(data) {
       const body = document.getElementById("report-body");
       let html = `<h1>Ledger Check — ${formatHeadingDate(data.startDate).split(" - ")[0]} → ${formatHeadingDate(data.endDate).split(" - ")[0]}</h1>`;
 
-      html += `<div class="card"><div class="card-head" style="border-left-color: var(--rule);">Dates Missing a Saved Company Ledger</div>
-        <div style="padding:6px 10px; font-size:12px; color:var(--ink-soft);">These dates have Entry/Expense data but the Company Ledger tab was never opened &amp; saved for them — so their income/expense is counted in the Period Report's totals, but was never folded into the OB → CB chain.</div>`;
+      html += `<div class="card"><div class="card-head" style="border-left-color: var(--rule);">Non-Working-Day Entries (likely stray data)</div>
+        <div style="padding:6px 10px; font-size:12px; color:var(--ink-soft);">The company only works Monday and Thursday, but these dates have saved data anyway — almost always a wrongly-typed date (manual entry or bulk import). Check them, and delete if they shouldn't exist.</div>`;
+      if (data.strayDates.length) {
+        html += data.strayDates.map((d) => `<div class="field-row"><span>${dispDate(d)} (${weekdayName(d)})</span><button class="action-btn" style="padding:3px 10px; font-size:12px;" onclick="deleteLedgerCheckDate('${d}')">Delete</button></div>`).join("");
+      } else {
+        html += `<div style="padding:8px 10px; font-size:13px; color:var(--accent-co);">None — no data found on a non-Monday/Thursday date.</div>`;
+      }
+      html += `</div>`;
+
+      html += `<div class="card" style="margin-top:16px;"><div class="card-head" style="border-left-color: var(--rule);">Dates Missing a Saved Company Ledger</div>
+        <div style="padding:6px 10px; font-size:12px; color:var(--ink-soft);">These (working-day) dates have Entry/Expense data but the Company Ledger tab was never opened &amp; saved for them — so their income/expense is counted in the Period Report's totals, but was never folded into the OB → CB chain.</div>`;
       if (data.missingDates.length) {
         html += data.missingDates.map((d) => `<div class="field-row"><span>${dispDate(d)} (${weekdayName(d)})</span></div>`).join("");
       } else {
-        html += `<div style="padding:8px 10px; font-size:13px; color:var(--accent-co);">None — every date with activity has a saved Company Ledger.</div>`;
+        html += `<div style="padding:8px 10px; font-size:13px; color:var(--accent-co);">None — every working-day date with activity has a saved Company Ledger.</div>`;
+      }
+      html += `</div>`;
+
+      html += `<div class="card" style="margin-top:16px;"><div class="card-head" style="border-left-color: var(--rule);">Double-Booked Workers (SP + Spl same date)</div>
+        <div style="padding:6px 10px; font-size:12px; color:var(--ink-soft);">SP and Spl are the same worker pool — one person should have only one row filled per date. These numbers have data entered under BOTH sections on the same date, so that person's wage was counted twice in that day's total. Open the Entry tab for that date and clear the wrong section's row for that worker.</div>`;
+      if (data.doubleBooked.length) {
+        html += `<table class="report-table"><thead><tr><th>Date</th><th>No.</th><th>SP Beedi/Wage</th><th>Spl Beedi/Wage</th></tr></thead><tbody>
+          ${data.doubleBooked.map((r) => `<tr><td>${dispDate(r.date)}</td><td>${r.number}</td><td>${r.spBeedi} / ${r.spKooli}</td><td>${r.splBeedi} / ${r.splKooli}</td></tr>`).join("")}
+          </tbody></table>`;
+      } else {
+        html += `<div style="padding:8px 10px; font-size:13px; color:var(--accent-co);">None — no worker has data under both SP and Spl on the same date.</div>`;
+      }
+      html += `</div>`;
+
+      html += `<div class="card" style="margin-top:16px;"><div class="card-head" style="border-left-color: var(--rule);">Duplicate Wage-Named Expense Items</div>
+        <div style="padding:6px 10px; font-size:12px; color:var(--ink-soft);">The app already auto-computes a "Wage" expense line from Entries every day. These are separately-added expense items labelled കൂലി/Wage/Coolie — almost always a duplicate that double-subtracts that day's wage from cash. Remove them, then re-save that date's Entry/Company Ledger.</div>`;
+      if (data.duplicateWageItems.length) {
+        html += `<table class="report-table"><thead><tr><th>Date</th><th>List</th><th>Label</th><th>Amount</th><th>Day's Wage</th><th></th></tr></thead><tbody>
+          ${data.duplicateWageItems.map((it) => `<tr><td>${dispDate(it.date)}</td><td>${it.type}</td><td>${it.label}</td><td>${it.amount}</td><td>${it.grossWage}</td><td><button class="action-btn" style="padding:2px 8px; font-size:11.5px;" onclick="deleteDuplicateWageItem('${it.date}','${it.type}','${it.label.replace(/'/g, "\\'")}',${it.amount})">Remove</button></td></tr>`).join("")}
+          </tbody></table>`;
+      } else {
+        html += `<div style="padding:8px 10px; font-size:13px; color:var(--accent-co);">None — no expense item labelled കൂലി/Wage/Coolie found in this range.</div>`;
       }
       html += `</div>`;
 
       html += `<div class="card" style="margin-top:16px;"><div class="card-head" style="border-left-color: var(--rule);">Opening Balance Breaks</div>
-        <div style="padding:6px 10px; font-size:12px; color:var(--ink-soft);">On these dates the saved Opening Balance doesn't match the previous saved date's Cash Balance — usually because OB was typed in manually instead of auto-carrying, or a date was skipped in between.</div>`;
+        <div style="padding:6px 10px; font-size:12px; color:var(--ink-soft);">On these dates the saved Opening Balance doesn't match the previous saved date's Cash Balance — usually because OB was typed in manually instead of auto-carrying, or the day's wage was inflated by a double-booked worker above.</div>`;
       if (data.chainBreaks.length) {
         html += `<table class="report-table"><thead><tr><th>Date</th><th>Prev Date</th><th>Prev CB</th><th>This OB</th><th>Diff</th></tr></thead><tbody>
           ${data.chainBreaks.map((b) => `<tr><td>${dispDate(b.date)}</td><td>${dispDate(b.prevDate)}</td><td>${b.prevCb}</td><td>${b.curOb}</td><td>${b.diff}</td></tr>`).join("")}
