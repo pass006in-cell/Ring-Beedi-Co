@@ -400,6 +400,7 @@
         <button class="day-btn" id="rbtn-due" onclick="switchReport('due')">Workers Advance</button>
         <button class="day-btn" id="rbtn-stockbook" onclick="switchReport('stockbook')">Stock Book</button>
         <button class="day-btn" id="rbtn-full" onclick="switchReport('full')">Worker Full Report</button>
+        <button class="day-btn" id="rbtn-ledgercheck" onclick="switchReport('ledgercheck')">Ledger Check</button>
       </div>
       <div id="report-controls" class="no-print"></div>
       <div style="text-align:right; margin: 6px 0;" class="no-print">
@@ -830,6 +831,45 @@
         startDate, endDate, workerRows, sectionTotals, grossWage, advanceCO, advanceSPSpl,
         pattiTotal, othersTotal, expenseTotals, staffByLabel, otherByLabel, incomeList, nonDailyList,
         periodOB, periodCB,
+      };
+    }
+
+    // "Ledger Check" diagnostic: finds why a Period Report's OB/Income/Expense/CB
+    // might not tally. Two checks over a date range —
+    //  1) dates that have Entry/Expense activity but no saved Company Ledger
+    //     document (their numbers count in Period Report totals but were never
+    //     folded into the OB->CB chain), and
+    //  2) dates where the saved Opening Balance doesn't match the previous saved
+    //     date's Cash Balance (usually a manual OB override breaking the chain).
+    async function fsGetLedgerCheckReport(startDate, endDate) {
+      const [entriesSnap, expensesSnap, ledgerSnap] = await Promise.all([
+        getDocs(query(collection(db, "entries"), where("date", ">=", startDate), where("date", "<=", endDate))),
+        getDocs(query(collection(db, "expenses"), where("date", ">=", startDate), where("date", "<=", endDate))),
+        getDocs(query(collection(db, "companyLedger"), where("date", ">=", startDate), where("date", "<=", endDate), orderBy("date"))),
+      ]);
+
+      const activityDates = new Set();
+      entriesSnap.forEach((d) => activityDates.add(d.data().date));
+      expensesSnap.forEach((d) => activityDates.add(d.data().date));
+
+      const ledgerDocs = ledgerSnap.docs.map((d) => d.data()).sort((a, b) => (a.date < b.date ? -1 : 1));
+      const ledgerByDate = {};
+      ledgerDocs.forEach((l) => { ledgerByDate[l.date] = l; });
+
+      const missingDates = Array.from(activityDates).filter((d) => !ledgerByDate[d]).sort();
+
+      const chainBreaks = [];
+      for (let i = 1; i < ledgerDocs.length; i++) {
+        const prev = ledgerDocs[i - 1], cur = ledgerDocs[i];
+        const prevCb = Number(prev.cb) || 0, curOb = Number(cur.ob) || 0;
+        if (Math.round(prevCb) !== Math.round(curOb)) {
+          chainBreaks.push({ date: cur.date, prevDate: prev.date, prevCb, curOb, diff: curOb - prevCb });
+        }
+      }
+
+      return {
+        startDate, endDate, missingDates, chainBreaks,
+        ledgerDatesCount: ledgerDocs.length, activityDatesCount: activityDates.size,
       };
     }
 
@@ -2019,7 +2059,7 @@
 
     window.switchReport = function (kind) {
       currentReport = kind;
-      ["daily", "period", "due", "stockbook", "full"].forEach((k) => document.getElementById("rbtn-" + k).classList.toggle("active", k === kind));
+      ["daily", "period", "due", "stockbook", "full", "ledgercheck"].forEach((k) => document.getElementById("rbtn-" + k).classList.toggle("active", k === kind));
       renderReportControls();
     };
 
@@ -2033,6 +2073,7 @@
       else if (currentReport === "due") buildWorkerDueWorkbook(wb, lastReportData);
       else if (currentReport === "stockbook") buildStockBookWorkbook(wb, lastReportData);
       else if (currentReport === "full") buildWorkerFullWorkbook(wb, lastReportData);
+      else if (currentReport === "ledgercheck") buildLedgerCheckWorkbook(wb, lastReportData);
       const filenameBit = currentReport + "-" + todayStr();
       XLSX.writeFile(wb, "RingBeedi-" + filenameBit + ".xlsx");
     };
@@ -2101,6 +2142,16 @@
       addSheetFromAOA(wb, "History", history);
     }
 
+    function buildLedgerCheckWorkbook(wb, data) {
+      const missing = [["Missing Ledger Save Dates"]];
+      data.missingDates.forEach((d) => missing.push([d]));
+      addSheetFromAOA(wb, "MissingLedger", missing);
+
+      const breaks = [["Date", "PrevDate", "PrevCB", "ThisOB", "Diff"]];
+      data.chainBreaks.forEach((b) => breaks.push([b.date, b.prevDate, b.prevCb, b.curOb, b.diff]));
+      addSheetFromAOA(wb, "OBBreaks", breaks);
+    }
+
     function buildStockBookWorkbook(wb, data) {
       const aoa = [["Date", "Day", "Opening", "Production", "Sale", "Short", "Closing"]];
       data.rows.forEach((r) => aoa.push([r.date, weekdayName(r.date), r.opening, r.production, r.sale, r.short, r.closing]));
@@ -2167,6 +2218,16 @@
         document.getElementById("report-stock-end").value = todayStr();
       } else if (currentReport === "full") {
         c.innerHTML = `<div class="day-picker"><button class="action-btn" onclick="loadWorkerFullReport()">Load</button></div>`;
+      } else if (currentReport === "ledgercheck") {
+        c.innerHTML = `
+          <div class="day-picker">
+            <input type="date" id="report-ledgercheck-start">
+            <span>to</span>
+            <input type="date" id="report-ledgercheck-end">
+            <button class="action-btn" onclick="loadLedgerCheck()">Load</button>
+          </div>`;
+        document.getElementById("report-ledgercheck-start").value = todayStr();
+        document.getElementById("report-ledgercheck-end").value = todayStr();
       } else {
         c.innerHTML = `<div class="day-picker"><button class="action-btn" onclick="loadWorkerDueReport()">Load</button></div>`;
       }
@@ -2326,6 +2387,47 @@
           <div class="field-row highlight"><b>Closing (period end)</b><b class="num">${fmtBK(clB)}</b></div>
         </div>`;
       }
+
+      body.innerHTML = html;
+    }
+
+    window.loadLedgerCheck = async function () {
+      const start = document.getElementById("report-ledgercheck-start").value;
+      const end = document.getElementById("report-ledgercheck-end").value;
+      if (!start || !end) return;
+      document.getElementById("report-body").innerHTML = "<p>Loading...</p>";
+      try {
+        const data = await fsGetLedgerCheckReport(start, end);
+        lastReportData = data;
+        renderLedgerCheckReport(data);
+      } catch (err) {
+        document.getElementById("report-body").innerHTML = "<p>Error: " + err.message + "</p>";
+      }
+    };
+
+    function renderLedgerCheckReport(data) {
+      const body = document.getElementById("report-body");
+      let html = `<h1>Ledger Check — ${formatHeadingDate(data.startDate).split(" - ")[0]} → ${formatHeadingDate(data.endDate).split(" - ")[0]}</h1>`;
+
+      html += `<div class="card"><div class="card-head" style="border-left-color: var(--rule);">Dates Missing a Saved Company Ledger</div>
+        <div style="padding:6px 10px; font-size:12px; color:var(--ink-soft);">These dates have Entry/Expense data but the Company Ledger tab was never opened &amp; saved for them — so their income/expense is counted in the Period Report's totals, but was never folded into the OB → CB chain.</div>`;
+      if (data.missingDates.length) {
+        html += data.missingDates.map((d) => `<div class="field-row"><span>${dispDate(d)} (${weekdayName(d)})</span></div>`).join("");
+      } else {
+        html += `<div style="padding:8px 10px; font-size:13px; color:var(--accent-co);">None — every date with activity has a saved Company Ledger.</div>`;
+      }
+      html += `</div>`;
+
+      html += `<div class="card" style="margin-top:16px;"><div class="card-head" style="border-left-color: var(--rule);">Opening Balance Breaks</div>
+        <div style="padding:6px 10px; font-size:12px; color:var(--ink-soft);">On these dates the saved Opening Balance doesn't match the previous saved date's Cash Balance — usually because OB was typed in manually instead of auto-carrying, or a date was skipped in between.</div>`;
+      if (data.chainBreaks.length) {
+        html += `<table class="report-table"><thead><tr><th>Date</th><th>Prev Date</th><th>Prev CB</th><th>This OB</th><th>Diff</th></tr></thead><tbody>
+          ${data.chainBreaks.map((b) => `<tr><td>${dispDate(b.date)}</td><td>${dispDate(b.prevDate)}</td><td>${b.prevCb}</td><td>${b.curOb}</td><td>${b.diff}</td></tr>`).join("")}
+          </tbody></table>`;
+      } else {
+        html += `<div style="padding:8px 10px; font-size:13px; color:var(--accent-co);">None — the Opening Balance chain is unbroken across saved dates in this range.</div>`;
+      }
+      html += `</div>`;
 
       body.innerHTML = html;
     }
