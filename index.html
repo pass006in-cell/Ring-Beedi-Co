@@ -45,7 +45,10 @@
     .section-totals { display: flex; flex-wrap: wrap; gap: 10px; font-size: 11.5px; padding: 6px 10px; background: rgba(0,0,0,0.03); }
     .field-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 10px; font-size: 13px; flex-wrap: wrap; gap: 2px 8px; }
     .field-row.highlight { background: #FDF0C7; border-radius: 4px; font-weight: bold; }
-    #settings-cards.hide-names { display: none; }
+    .settings-toggle-head { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 8px; }
+    .settings-toggle-head .settings-arrow { display: inline-block; transition: transform 0.15s ease; font-size: 11px; }
+    .settings-toggle-head.open .settings-arrow { transform: rotate(90deg); }
+    .settings-section-body { padding: 10px; }
     .field-row input { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; text-align: right; width: 100px; padding: 4px 6px; border: 1px solid #CBD8CC; border-radius: 3px; }
     .expense-block { padding: 6px 10px 10px 10px; }
     .expense-title { font-size: 11.5px; color: var(--ink-soft); margin-bottom: 4px; }
@@ -287,17 +290,20 @@
       </div>
     </div>
     <div id="tab-settings" style="display:none">
-      <div class="card" style="padding:8px 10px;">
-        <label style="display:flex; align-items:center; gap:8px; font-size:13px; margin:0;">
-          <input type="checkbox" id="toggle-worker-names" onchange="toggleWorkerNamesUI(this.checked)">
-          Show worker details (numbers / names / add / remove)
-        </label>
+      <div class="card">
+        <div class="card-head settings-toggle-head" id="sec-workers-head" onclick="toggleSettingsSection('workers')">
+          <span class="settings-arrow">▸</span> Worker Details (numbers / names / add / remove)
+        </div>
+        <div id="sec-workers-body" class="settings-section-body" style="display:none; padding:0;">
+          <div id="settings-cards"></div>
+        </div>
       </div>
-      <div id="settings-cards" class="hide-names"></div>
 
       <div class="card">
-        <div class="card-head" style="border-left-color: var(--accent-spl);">Wage Rate Table</div>
-        <div style="padding: 10px;">
+        <div class="card-head settings-toggle-head" id="sec-wagerate-head" onclick="toggleSettingsSection('wagerate')" style="border-left-color: var(--accent-spl);">
+          <span class="settings-arrow">▸</span> Wage Rate Table
+        </div>
+        <div id="sec-wagerate-body" class="settings-section-body" style="display:none;">
           <p style="font-size:12px; color:var(--ink-soft); margin-top:0;">
             For the correct wage to be calculated when the rate changes, each rate change needs an <b>effective date</b>.
             Entries before that date keep using the old rate; from that date onward, the new rate applies.
@@ -322,8 +328,10 @@
       </div>
 
       <div class="card">
-        <div class="card-head" style="border-left-color: var(--accent-sp);">Bulk Import</div>
-        <div style="padding: 10px;">
+        <div class="card-head settings-toggle-head" id="sec-import-head" onclick="toggleSettingsSection('import')" style="border-left-color: var(--accent-sp);">
+          <span class="settings-arrow">▸</span> Bulk Import
+        </div>
+        <div id="sec-import-body" class="settings-section-body" style="display:none;">
           <p style="font-size:12px; color:var(--ink-soft); margin-top:0;">
             You can upload an Excel (.xlsx) file with any of these sheets (exact sheet names):<br>
             • <b>Entries</b> — Date, Day, Section, Number, Beedi, Advance, Patti, Others<br>
@@ -345,8 +353,10 @@
       </div>
 
       <div class="card">
-        <div class="card-head" style="border-left-color: var(--accent-co);">Backup / Restore</div>
-        <div style="padding: 10px;">
+        <div class="card-head settings-toggle-head" id="sec-backup-head" onclick="toggleSettingsSection('backup')" style="border-left-color: var(--accent-co);">
+          <span class="settings-arrow">▸</span> Backup / Restore
+        </div>
+        <div id="sec-backup-body" class="settings-section-body" style="display:none;">
           <p style="font-size:12px; color:var(--ink-soft); margin-top:0;">
             You can download a full backup of all data (Entries, Expenses, CompanyLedger, CashSummary, Stock, StockMovements, Workers)
             as one Excel file, and restore from it later if needed.
@@ -370,8 +380,10 @@
       </div>
 
       <div class="card">
-        <div class="card-head" style="border-left-color: var(--rule);">Delete Data (⚠️ Careful)</div>
-        <div style="padding: 10px;">
+        <div class="card-head settings-toggle-head" id="sec-delete-head" onclick="toggleSettingsSection('delete')" style="border-left-color: var(--rule);">
+          <span class="settings-arrow">▸</span> Delete Data (⚠️ Careful)
+        </div>
+        <div id="sec-delete-body" class="settings-section-body" style="display:none;">
           <div class="expense-title">Delete a single worker's entry (one date)</div>
           <p style="font-size:11.5px; color:var(--ink-soft); margin-top:-4px;">
             To delete a single accidental/wrong entry — the rest of that day's data stays unaffected.
@@ -403,8 +415,10 @@
       </div>
 
       <div class="card">
-        <div class="card-head" style="border-left-color: var(--rule);">Ledger Check</div>
-        <div style="padding: 10px;">
+        <div class="card-head settings-toggle-head" id="sec-ledgercheck-head" onclick="toggleSettingsSection('ledgercheck')" style="border-left-color: var(--rule);">
+          <span class="settings-arrow">▸</span> Ledger Check
+        </div>
+        <div id="sec-ledgercheck-body" class="settings-section-body" style="display:none;">
           <p style="font-size:12px; color:var(--ink-soft); margin-top:0;">
             Diagnostic for a Period Report that doesn't tally — finds stray non-working-day data, missing Company Ledger saves, workers double-booked under both SP and Spl, and duplicate wage-named expense items.
           </p>
@@ -1665,6 +1679,11 @@
     const ALL_TABS = ["home", "entry", "ledger", "stock", "settings", "reports"];
     let historyDepth = 0; // 0 = at Home, 1 = in a sub-tab
 
+    // When a Period Report line is clicked to edit it, this remembers where to
+    // jump back to (which report, its date range/view, and scroll position) so
+    // saving the Company Ledger returns straight to that same, refreshed view.
+    let returnAfterLedgerSave = null;
+
     function applyTab(name) {
       ALL_TABS.forEach((t) => {
         document.getElementById("tab-" + t).style.display = t === name ? "" : "none";
@@ -1678,6 +1697,7 @@
     }
 
     window.switchTab = function (name) {
+      if (name !== "ledger") returnAfterLedgerSave = null; // abandoning the edit-and-return flow
       applyTab(name);
       if (name === "home") {
         if (historyDepth === 1) { history.replaceState({ tab: "home" }, "", "#home"); historyDepth = 0; }
@@ -2194,6 +2214,11 @@
         closeLedgerReview();
         setLedgerStatus("Saved — CB: " + res.closingBalance);
         clearLedgerScreen();
+        if (returnAfterLedgerSave) {
+          const r = returnAfterLedgerSave;
+          returnAfterLedgerSave = null;
+          await goBackToReport(r);
+        }
       } catch (err) {
         alert("Error: " + err.message);
       }
@@ -2229,11 +2254,48 @@
     };
 
     // Jumps to the Company Ledger tab pre-loaded on a specific date, so a line
-    // seen in a Period Report can be opened and edited directly.
+    // seen in a Period Report can be opened and edited directly. Remembers the
+    // Period Report's date range, arrangement and scroll position so saving
+    // the ledger returns straight back to the same, refreshed view.
     window.editPeriodLine = function (dateStr) {
+      const startEl = document.getElementById("report-start-date"), endEl = document.getElementById("report-end-date");
+      returnAfterLedgerSave = {
+        kind: currentReport,
+        start: startEl ? startEl.value : "",
+        end: endEl ? endEl.value : "",
+        viewMode: periodViewMode,
+        scrollY: window.scrollY,
+      };
       document.getElementById("ledger-date-input").value = dateStr;
       window.switchTab("ledger");
     };
+
+    // Switches straight to a given report (bypassing the normal Reports-tab
+    // default of "daily"), restoring its date range/arrangement and reloading
+    // it fresh, then restoring the scroll position. Used after editing a
+    // Company Ledger line reached from a report.
+    async function goBackToReport(r) {
+      ALL_TABS.forEach((t) => {
+        document.getElementById("tab-" + t).style.display = t === "reports" ? "" : "none";
+        document.getElementById("tabbtn-" + t).classList.toggle("active", t === "reports");
+      });
+      if (historyDepth === 0) { history.pushState({ tab: "reports" }, "", "#reports"); historyDepth = 1; }
+      else { history.replaceState({ tab: "reports" }, "", "#reports"); }
+      currentReport = r.kind;
+      ["daily", "period", "book", "due", "stockbook", "full"].forEach((k) => document.getElementById("rbtn-" + k).classList.toggle("active", k === r.kind));
+      renderReportControls();
+      if (r.kind === "period") {
+        periodViewMode = r.viewMode || "date";
+        const startEl = document.getElementById("report-start-date"), endEl = document.getElementById("report-end-date");
+        if (startEl) startEl.value = r.start || todayStr();
+        if (endEl) endEl.value = r.end || todayStr();
+        const btnDate = document.getElementById("pv-date"), btnItem = document.getElementById("pv-item");
+        if (btnDate) btnDate.classList.toggle("active", periodViewMode === "date");
+        if (btnItem) btnItem.classList.toggle("active", periodViewMode === "item");
+        await window.loadPeriodReport();
+      }
+      requestAnimationFrame(() => window.scrollTo(0, r.scrollY || 0));
+    }
 
     function groupReportListByLabel(list) {
       const groups = {};
@@ -3074,6 +3136,23 @@
       document.getElementById("stock-cards").innerHTML = "";
     }
 
+    /* ================= Settings tab: collapsible sections ================= */
+    // Every Settings card starts collapsed (heading only); clicking the heading
+    // opens/closes it. The "workers" section additionally remembers its
+    // open/closed state per device (localStorage), since that's the one most
+    // likely to be left open by accident.
+    window.toggleSettingsSection = function (key) {
+      const body = document.getElementById("sec-" + key + "-body");
+      const head = document.getElementById("sec-" + key + "-head");
+      if (!body || !head) return;
+      const opening = body.style.display === "none";
+      body.style.display = opening ? "" : "none";
+      head.classList.toggle("open", opening);
+      if (key === "workers") {
+        try { localStorage.setItem("showWorkerNames", opening ? "1" : "0"); } catch (e) {}
+      }
+    };
+
     /* ================= Settings tab: workers ================= */
 
     let settingsWorkersCache = { CO: [], Spl: [], SP: [] };
@@ -3084,14 +3163,8 @@
       renderSettings(workers);
       let showNames = false;
       try { showNames = localStorage.getItem("showWorkerNames") === "1"; } catch (e) {}
-      const cb = document.getElementById("toggle-worker-names");
-      if (cb) cb.checked = showNames;
-      document.getElementById("settings-cards").classList.toggle("hide-names", !showNames);
-    };
-
-    window.toggleWorkerNamesUI = function (checked) {
-      try { localStorage.setItem("showWorkerNames", checked ? "1" : "0"); } catch (e) {}
-      document.getElementById("settings-cards").classList.toggle("hide-names", !checked);
+      document.getElementById("sec-workers-body").style.display = showNames ? "" : "none";
+      document.getElementById("sec-workers-head").classList.toggle("open", showNames);
     };
 
     function renderSettings(workers) {
