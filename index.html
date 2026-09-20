@@ -45,7 +45,7 @@
     .section-totals { display: flex; flex-wrap: wrap; gap: 10px; font-size: 11.5px; padding: 6px 10px; background: rgba(0,0,0,0.03); }
     .field-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 10px; font-size: 13px; flex-wrap: wrap; gap: 2px 8px; }
     .field-row.highlight { background: #FDF0C7; border-radius: 4px; font-weight: bold; }
-    #settings-cards.hide-names input.worker-name-input { display: none; }
+    #settings-cards.hide-names { display: none; }
     .field-row input { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; text-align: right; width: 100px; padding: 4px 6px; border: 1px solid #CBD8CC; border-radius: 3px; }
     .expense-block { padding: 6px 10px 10px 10px; }
     .expense-title { font-size: 11.5px; color: var(--ink-soft); margin-bottom: 4px; }
@@ -290,10 +290,10 @@
       <div class="card" style="padding:8px 10px;">
         <label style="display:flex; align-items:center; gap:8px; font-size:13px; margin:0;">
           <input type="checkbox" id="toggle-worker-names" onchange="toggleWorkerNamesUI(this.checked)">
-          Show worker name fields (below, next to each number)
+          Show worker details (numbers / names / add / remove)
         </label>
       </div>
-      <div id="settings-cards"></div>
+      <div id="settings-cards" class="hide-names"></div>
 
       <div class="card">
         <div class="card-head" style="border-left-color: var(--accent-spl);">Wage Rate Table</div>
@@ -3082,8 +3082,8 @@
       const workers = await fsGetWorkers();
       settingsWorkersCache = workers;
       renderSettings(workers);
-      let showNames = true;
-      try { showNames = localStorage.getItem("showWorkerNames") !== "0"; } catch (e) {}
+      let showNames = false;
+      try { showNames = localStorage.getItem("showWorkerNames") === "1"; } catch (e) {}
       const cb = document.getElementById("toggle-worker-names");
       if (cb) cb.checked = showNames;
       document.getElementById("settings-cards").classList.toggle("hide-names", !showNames);
