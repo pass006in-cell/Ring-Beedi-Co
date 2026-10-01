@@ -44,20 +44,13 @@
     .balance { color: var(--rule); }
     .section-totals { display: flex; flex-wrap: wrap; gap: 10px; font-size: 11.5px; padding: 6px 10px; background: rgba(0,0,0,0.03); }
     .field-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 10px; font-size: 13px; flex-wrap: wrap; gap: 2px 8px; }
-    .field-row.highlight { background: #FDF0C7; border-radius: 4px; font-weight: bold; }
-    .settings-toggle-head { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 8px; }
-    .settings-toggle-head .settings-arrow { display: inline-block; transition: transform 0.15s ease; font-size: 11px; }
-    .settings-toggle-head.open .settings-arrow { transform: rotate(90deg); }
-    .settings-section-body { padding: 10px; }
     .field-row input { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; text-align: right; width: 100px; padding: 4px 6px; border: 1px solid #CBD8CC; border-radius: 3px; }
     .expense-block { padding: 6px 10px 10px 10px; }
     .expense-title { font-size: 11.5px; color: var(--ink-soft); margin-bottom: 4px; }
-    .expense-row { display: flex; gap: 4px; margin-bottom: 4px; }
-    .expense-row input.label { flex: 1 1 auto; min-width: 0; text-align: left; }
-    .expense-row input.item { flex: 1 1 38%; min-width: 0; text-align: left; }
-    .expense-row input.desc-inline { flex: 1 1 38%; min-width: 0; text-align: left; }
-    .expense-row input.amount { flex: 0 0 48px; width: 48px; min-width: 0; text-align: right; padding-left: 2px; padding-right: 2px; }
-    .expense-row input { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; padding: 4px; border: 1px solid #CBD8CC; border-radius: 3px; box-sizing: border-box; min-width: 0; }
+    .expense-row { display: flex; gap: 6px; margin-bottom: 4px; }
+    .expense-row input.label { flex: 1.6; text-align: left; }
+    .expense-row input.amount { flex: 1; text-align: right; }
+    .expense-row input { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; padding: 4px; border: 1px solid #CBD8CC; border-radius: 3px; }
     .add-row-btn { font-size: 12px; background: none; border: none; color: var(--ink-soft); cursor: pointer; padding: 4px 0; }
     .divider { border-top: 1px solid #D3DFD3; margin: 8px 10px; }
     .tally { margin: 8px 10px; padding: 10px; border-radius: 4px; text-align: center; font-weight: bold; border: 2px solid var(--rule); color: var(--rule); }
@@ -87,9 +80,6 @@
     .report-table th, .report-table td { padding: 3px 5px; text-align: right; border-bottom: 1px solid #E3E9E3; }
     .report-table th:first-child, .report-table td:first-child { text-align: left; }
     .report-table th { color: var(--ink-soft); font-size: 10.5px; }
-    .report-table tbody tr:nth-child(even) { background: #EEF3EC; }
-    .report-table td.stock-closing { font-weight: bold; background: #FDF0C7; }
-    .report-table td.stock-short.has-value { color: var(--rule); font-weight: bold; }
     .report-net-pos { color: var(--rule); font-weight: bold; }
     .report-net-neg { color: var(--accent-spl); font-weight: bold; }
     .due-hist-row { background: #FFF6DD; }
@@ -108,10 +98,11 @@
       .no-print { display: none !important; }
       body { border-left: none; background: #fff; padding: 0; }
       .card, .report-section { break-inside: avoid; border: 1px solid #999; }
-      /* Ledger Book: fit 2 saved dates per printed page */
-      .ledger-book-entry:nth-of-type(2n) { break-after: page; page-break-after: always; }
     }
-  </style>
+    .mi{font:inherit;font-size:13px;padding:6px;border:1px solid #C8D3C9;border-radius:3px;background:var(--card);width:100%;margin-bottom:6px;min-width:0}
+  .mrow{display:flex;gap:6px}.mrow>*{flex:1;min-width:0}
+  .mbtn{font:inherit;font-size:12px;padding:3px 8px;border:1px solid var(--rule);background:var(--card);border-radius:3px;margin-right:6px}
+</style>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#B23A48">
@@ -138,6 +129,7 @@
       <button class="day-btn tab-btn" id="tabbtn-entry" onclick="switchTab('entry')">Entry</button>
       <button class="day-btn tab-btn" id="tabbtn-ledger" onclick="switchTab('ledger')">Company Ledger</button>
       <button class="day-btn tab-btn" id="tabbtn-stock" onclick="switchTab('stock')">Stock</button>
+      <button class="day-btn tab-btn" id="tabbtn-material" onclick="switchTab('material')">Material</button>
       <button class="day-btn tab-btn" id="tabbtn-settings" onclick="switchTab('settings')">Settings</button>
       <button class="day-btn tab-btn" id="tabbtn-reports" onclick="switchTab('reports')">Reports</button>
       <button class="day-btn" onclick="doLogout()" style="margin-left:auto;">Logout</button>
@@ -291,21 +283,37 @@
         </div>
       </div>
     </div>
+    <div id="tab-material" style="display:none">
+      <div class="card"><div class="card-head" style="border-left-color: var(--accent-co);">Leaf / Tobacco Stock (Kg)</div><div id="mat-stock" style="padding:6px 0"></div></div>
+      <div class="card"><div class="card-head" style="border-left-color: var(--accent-sp);">New Purchase</div>
+        <div style="padding:10px;">
+          <div class="mrow"><input type="date" id="mp-date" class="mi"><select id="mp-item" class="mi"><option value="leaf">Leaf (ഇല)</option><option value="tobacco">Tobacco (പുകയില)</option></select></div>
+          <div class="mrow"><input id="mp-kg" class="mi" type="text" inputmode="decimal" placeholder="Kg"><input id="mp-rate" class="mi" type="text" inputmode="decimal" placeholder="Rate / Kg"><input id="mp-paid" class="mi" type="text" inputmode="decimal" placeholder="Paid now"></div>
+          <input id="mp-desc" class="mi" type="text" placeholder="Description (supplier, type, bill no...)">
+          <button class="action-btn primary" onclick="saveMatPurchase()">Save Purchase</button>
+          <div class="status" id="mat-status"></div>
+        </div></div>
+      <div class="card"><div class="card-head" style="border-left-color: var(--rule);">Purchases &amp; Payments</div><div id="mat-purchases" style="padding:6px 10px"></div></div>
+      <div class="card"><div class="card-head" style="border-left-color: var(--accent-spl);">Issued to Workers</div>
+        <div style="padding:10px;"><div class="day-picker"><input type="date" id="mr-start"><span>to</span><input type="date" id="mr-end"><button class="action-btn" onclick="loadMatReport()">Load</button></div>
+        <div id="mat-report"></div></div></div>
+    </div>
     <div id="tab-settings" style="display:none">
-      <div class="card">
-        <div class="card-head settings-toggle-head" id="sec-workers-head" onclick="toggleSettingsSection('workers')">
-          <span class="settings-arrow">▸</span> Worker Details (numbers / names / add / remove)
-        </div>
-        <div id="sec-workers-body" class="settings-section-body" style="display:none; padding:0;">
-          <div id="settings-cards"></div>
-        </div>
-      </div>
+      <div id="settings-cards"></div>
+      <div class="card"><div class="card-head" style="border-left-color: var(--accent-co);">Leaf / Tobacco Issue (Kg per worker)</div>
+        <div style="padding:10px;">
+          <p style="font-size:12px;color:var(--ink-soft);margin-top:0">Kg given to each worker who has a beedi count that day. Pick the date these quantities start from (use an old date to cover old data).</p>
+          <div class="rows-scroll"><table class="report-table" style="min-width:0"><tr><th>Section</th><th>Leaf Kg</th><th>Tobacco Kg</th></tr>
+            <tr><td>CO</td><td><input class="mi" id="md-CO-leaf" inputmode="decimal"></td><td><input class="mi" id="md-CO-tobacco" inputmode="decimal"></td></tr>
+            <tr><td>SP</td><td><input class="mi" id="md-SP-leaf" inputmode="decimal"></td><td><input class="mi" id="md-SP-tobacco" inputmode="decimal"></td></tr>
+            <tr><td>Spl</td><td><input class="mi" id="md-Spl-leaf" inputmode="decimal"></td><td><input class="mi" id="md-Spl-tobacco" inputmode="decimal"></td></tr></table></div>
+          <div class="mrow" style="margin-top:6px"><input type="date" id="md-date" class="mi"><button class="action-btn primary" onclick="saveMatDefault()">Save</button></div>
+          <div id="matdef-list" style="font-size:12px"></div>
+        </div></div>
 
       <div class="card">
-        <div class="card-head settings-toggle-head" id="sec-wagerate-head" onclick="toggleSettingsSection('wagerate')" style="border-left-color: var(--accent-spl);">
-          <span class="settings-arrow">▸</span> Wage Rate Table
-        </div>
-        <div id="sec-wagerate-body" class="settings-section-body" style="display:none;">
+        <div class="card-head" style="border-left-color: var(--accent-spl);">Wage Rate Table</div>
+        <div style="padding: 10px;">
           <p style="font-size:12px; color:var(--ink-soft); margin-top:0;">
             For the correct wage to be calculated when the rate changes, each rate change needs an <b>effective date</b>.
             Entries before that date keep using the old rate; from that date onward, the new rate applies.
@@ -330,10 +338,8 @@
       </div>
 
       <div class="card">
-        <div class="card-head settings-toggle-head" id="sec-import-head" onclick="toggleSettingsSection('import')" style="border-left-color: var(--accent-sp);">
-          <span class="settings-arrow">▸</span> Bulk Import
-        </div>
-        <div id="sec-import-body" class="settings-section-body" style="display:none;">
+        <div class="card-head" style="border-left-color: var(--accent-sp);">Bulk Import</div>
+        <div style="padding: 10px;">
           <p style="font-size:12px; color:var(--ink-soft); margin-top:0;">
             You can upload an Excel (.xlsx) file with any of these sheets (exact sheet names):<br>
             • <b>Entries</b> — Date, Day, Section, Number, Beedi, Advance, Patti, Others<br>
@@ -355,10 +361,8 @@
       </div>
 
       <div class="card">
-        <div class="card-head settings-toggle-head" id="sec-backup-head" onclick="toggleSettingsSection('backup')" style="border-left-color: var(--accent-co);">
-          <span class="settings-arrow">▸</span> Backup / Restore
-        </div>
-        <div id="sec-backup-body" class="settings-section-body" style="display:none;">
+        <div class="card-head" style="border-left-color: var(--accent-co);">Backup / Restore</div>
+        <div style="padding: 10px;">
           <p style="font-size:12px; color:var(--ink-soft); margin-top:0;">
             You can download a full backup of all data (Entries, Expenses, CompanyLedger, CashSummary, Stock, StockMovements, Workers)
             as one Excel file, and restore from it later if needed.
@@ -382,10 +386,8 @@
       </div>
 
       <div class="card">
-        <div class="card-head settings-toggle-head" id="sec-delete-head" onclick="toggleSettingsSection('delete')" style="border-left-color: var(--rule);">
-          <span class="settings-arrow">▸</span> Delete Data (⚠️ Careful)
-        </div>
-        <div id="sec-delete-body" class="settings-section-body" style="display:none;">
+        <div class="card-head" style="border-left-color: var(--rule);">Delete Data (⚠️ Careful)</div>
+        <div style="padding: 10px;">
           <div class="expense-title">Delete a single worker's entry (one date)</div>
           <p style="font-size:11.5px; color:var(--ink-soft); margin-top:-4px;">
             To delete a single accidental/wrong entry — the rest of that day's data stays unaffected.
@@ -415,33 +417,13 @@
           <div class="status" id="delete-status"></div>
         </div>
       </div>
-
-      <div class="card">
-        <div class="card-head settings-toggle-head" id="sec-ledgercheck-head" onclick="toggleSettingsSection('ledgercheck')" style="border-left-color: var(--rule);">
-          <span class="settings-arrow">▸</span> Ledger Check
-        </div>
-        <div id="sec-ledgercheck-body" class="settings-section-body" style="display:none;">
-          <p style="font-size:12px; color:var(--ink-soft); margin-top:0;">
-            Diagnostic for a Period Report that doesn't tally — finds stray non-working-day data, missing Company Ledger saves, workers double-booked under both SP and Spl, and duplicate wage-named expense items.
-          </p>
-          <div class="day-picker" style="margin-bottom:8px;">
-            <input type="date" id="settings-lc-start">
-            <span>to</span>
-            <input type="date" id="settings-lc-end">
-            <button class="action-btn" onclick="loadLedgerCheck()">Load</button>
-            <button class="action-btn" onclick="exportLedgerCheckToExcel()">📊 Export to Excel</button>
-          </div>
-          <div id="settings-lc-body"></div>
-        </div>
-      </div>
     </div>
     <div id="tab-reports" style="display:none">
       <div class="day-picker no-print">
         <button class="day-btn" id="rbtn-daily" onclick="switchReport('daily')">Daily Report</button>
         <button class="day-btn" id="rbtn-period" onclick="switchReport('period')">Period Report</button>
-        <button class="day-btn" id="rbtn-book" onclick="switchReport('book')">Ledger Book</button>
-        <button class="day-btn" id="rbtn-stockbook" onclick="switchReport('stockbook')">Stock Book</button>
         <button class="day-btn" id="rbtn-due" onclick="switchReport('due')">Workers Advance</button>
+        <button class="day-btn" id="rbtn-stockbook" onclick="switchReport('stockbook')">Stock Book</button>
         <button class="day-btn" id="rbtn-full" onclick="switchReport('full')">Worker Full Report</button>
       </div>
       <div id="report-controls" class="no-print"></div>
@@ -625,19 +607,6 @@
       return (items || []).reduce((s, it) => s + (Number(it.amount) || 0), 0);
     }
 
-    // Income/Non-Daily/Other-Expense line items moved from a single free-text
-    // "label" to an "item" (category, e.g. Sale, Rent) + "description" (the
-    // per-entry detail) pair, so Period Report can group same-item lines
-    // together. These helpers read either schema, so older saved items
-    // (label only — from before this change, or from Bulk Import/Restore,
-    // which still write the older shape) keep displaying correctly.
-    function itemName(it) { return (it && (it.item !== undefined ? it.item : it.label)) || ""; }
-    function itemDesc(it) { return (it && it.description) || ""; }
-    function itemDisplay(it) {
-      const name = itemName(it), desc = itemDesc(it);
-      return desc ? (name + " — " + desc) : name;
-    }
-
     /* ================= Firestore data layer ================= */
 
     async function fsGetEntriesForDate(dateStr) {
@@ -703,16 +672,9 @@
     }
 
     async function fsSaveExpenses(dateStr, expensesByType) {
-      // OtherDaily/NonDaily/Income lines are stored as item + description + amount
-      // (so Period Report can group same-item lines together); StaffPayment stays
-      // a plain name + amount (payee names don't need a separate description).
       const promises = Object.keys(expensesByType).map((type) => {
-        const useItemDesc = type === "OtherDaily" || type === "NonDaily" || type === "Income";
-        const items = (expensesByType[type] || [])
-          .filter((it) => it.item || it.label || it.description || it.amount)
-          .map((it) => useItemDesc
-            ? { item: itemName(it), description: itemDesc(it), amount: Number(it.amount) || 0 }
-            : { label: it.label || "", amount: Number(it.amount) || 0 });
+        const items = (expensesByType[type] || []).filter((it) => it.label || it.amount)
+          .map((it) => ({ label: it.label || "", amount: Number(it.amount) || 0 }));
         return setDoc(doc(db, "expenses", dateStr + "__" + type), { date: dateStr, type: type, items: items });
       });
       await Promise.all(promises);
@@ -870,10 +832,10 @@
         (r.items || []).forEach((it) => {
           const amt = Number(it.amount) || 0;
           if (expenseTotals[type] !== undefined) expenseTotals[type] += amt;
-          if (type === "StaffPayment") staffByLabel[itemName(it)] = (staffByLabel[itemName(it)] || 0) + amt;
-          if (type === "OtherDaily") otherByLabel[itemName(it)] = (otherByLabel[itemName(it)] || 0) + amt;
-          if (type === "Income") incomeList.push({ date: r.date, item: itemName(it), description: itemDesc(it), amount: amt });
-          if (type === "NonDaily") nonDailyList.push({ date: r.date, item: itemName(it), description: itemDesc(it), amount: amt });
+          if (type === "StaffPayment") staffByLabel[it.label] = (staffByLabel[it.label] || 0) + amt;
+          if (type === "OtherDaily") otherByLabel[it.label] = (otherByLabel[it.label] || 0) + amt;
+          if (type === "Income") incomeList.push({ date: r.date, label: it.label, amount: amt });
+          if (type === "NonDaily") nonDailyList.push({ date: r.date, label: it.label, amount: amt });
         });
       });
 
@@ -894,160 +856,6 @@
         pattiTotal, othersTotal, expenseTotals, staffByLabel, otherByLabel, incomeList, nonDailyList,
         periodOB, periodCB,
       };
-    }
-
-    // Company only works Monday and Thursday (see the Entry tab's day picker),
-    // so any date whose weekday isn't one of those is presumptively a stray
-    // entry (typo'd date, bad bulk-import row, etc.) rather than real activity.
-    function isWorkingWeekday(dateStr) {
-      const wd = weekdayName(dateStr);
-      return wd === "Monday" || wd === "Thursday";
-    }
-
-    // "Ledger Check" diagnostic: finds why a Period Report's OB/Income/Expense/CB
-    // might not tally. Checks over a date range —
-    //  1) dates that have Entry/Expense activity but no saved Company Ledger
-    //     document (their numbers count in Period Report totals but were never
-    //     folded into the OB->CB chain) — flagged separately when they also fall
-    //     on a non-working weekday (likely a stray/erroneous entry to delete),
-    //  2) dates where the saved Opening Balance doesn't match the previous saved
-    //     date's Cash Balance (usually a manual OB override breaking the chain),
-    //  3) worker numbers that have real data (beedi/advance/patti) entered under
-    //     BOTH SP and Spl for the same date — since SP and Spl are the same
-    //     worker pool (identityPool), this double-books one person's wage into
-    //     that day's gross wage total, which is a common cause of (2).
-    async function fsGetLedgerCheckReport(startDate, endDate) {
-      const [entriesSnap, expensesSnap, ledgerSnap] = await Promise.all([
-        getDocs(query(collection(db, "entries"), where("date", ">=", startDate), where("date", "<=", endDate))),
-        getDocs(query(collection(db, "expenses"), where("date", ">=", startDate), where("date", "<=", endDate))),
-        getDocs(query(collection(db, "companyLedger"), where("date", ">=", startDate), where("date", "<=", endDate), orderBy("date"))),
-      ]);
-
-      const activityDates = new Set();
-      const entriesRaw = [];
-      entriesSnap.forEach((d) => { const r = d.data(); activityDates.add(r.date); entriesRaw.push(r); });
-      const expensesRaw = [];
-      expensesSnap.forEach((d) => { const r = d.data(); activityDates.add(r.date); expensesRaw.push(r); });
-
-      const ledgerDocs = ledgerSnap.docs.map((d) => d.data()).sort((a, b) => (a.date < b.date ? -1 : 1));
-      const ledgerByDate = {};
-      ledgerDocs.forEach((l) => { ledgerByDate[l.date] = l; });
-
-      const missingDatesAll = Array.from(activityDates).filter((d) => !ledgerByDate[d]).sort();
-      const missingDates = missingDatesAll.filter((d) => isWorkingWeekday(d));
-      const strayDates = missingDatesAll.filter((d) => !isWorkingWeekday(d));
-
-      const chainBreaks = [];
-      for (let i = 1; i < ledgerDocs.length; i++) {
-        const prev = ledgerDocs[i - 1], cur = ledgerDocs[i];
-        const prevCb = Number(prev.cb) || 0, curOb = Number(cur.ob) || 0;
-        if (Math.round(prevCb) !== Math.round(curOb)) {
-          chainBreaks.push({ date: cur.date, prevDate: prev.date, prevCb, curOb, diff: curOb - prevCb });
-        }
-      }
-
-      // Double-booked: same worker number has real data under both SP and Spl
-      // on the same date (SP/Spl are meant to be one person, one row per day).
-      const byDateNumber = {};
-      entriesRaw.forEach((r) => {
-        if (r.section !== "SP" && r.section !== "Spl") return;
-        const hasData = (Number(r.beedi) || 0) > 0 || (Number(r.advance) || 0) > 0 || (Number(r.patti) || 0) > 0;
-        if (!hasData) return;
-        const key = r.date + "__" + r.number;
-        if (!byDateNumber[key]) byDateNumber[key] = { date: r.date, number: r.number };
-        byDateNumber[key][r.section] = r;
-      });
-      const doubleBooked = Object.values(byDateNumber)
-        .filter((row) => row.SP && row.Spl)
-        .map((row) => ({
-          date: row.date, number: row.number,
-          spBeedi: Number(row.SP.beedi) || 0, spKooli: Number(row.SP.kooli) || 0,
-          splBeedi: Number(row.Spl.beedi) || 0, splKooli: Number(row.Spl.kooli) || 0,
-        }))
-        .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : Number(a.number) - Number(b.number)));
-
-      // Duplicate-wage expense items: a manually-added or bulk-imported expense
-      // line literally labelled "കൂലി"/"Wage"/"Coolie" duplicates the app's own
-      // auto-computed Wage row (summed from Entries), double-subtracting that
-      // day's wage from cash — a common cause of Opening Balance breaks above.
-      const grossWageByDate = {};
-      entriesRaw.forEach((r) => { grossWageByDate[r.date] = (grossWageByDate[r.date] || 0) + (Number(r.kooli) || 0); });
-      const wageKeywordRe = /(കൂലി|coolie|wage)/i;
-      const duplicateWageItems = [];
-      expensesRaw.forEach((r) => {
-        (r.items || []).forEach((it) => {
-          const label = itemDisplay(it).trim();
-          if (!label || !wageKeywordRe.test(label)) return;
-          duplicateWageItems.push({
-            date: r.date, type: r.type, label, amount: Number(it.amount) || 0,
-            grossWage: grossWageByDate[r.date] || 0,
-          });
-        });
-      });
-      duplicateWageItems.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-
-      return {
-        startDate, endDate, missingDates, strayDates, chainBreaks, doubleBooked, duplicateWageItems,
-        ledgerDatesCount: ledgerDocs.length, activityDatesCount: activityDates.size,
-      };
-    }
-
-    // Removes one matching item from an expenses/{date}__{type} document — used
-    // to clear a stray duplicate-wage expense line found by Ledger Check.
-    async function fsRemoveExpenseItem(dateStr, type, label, amount) {
-      const ref = doc(db, "expenses", dateStr + "__" + type);
-      const snap = await getDoc(ref);
-      if (!snap.exists()) return;
-      const data = snap.data();
-      const items = (data.items || []).filter((it) => !(itemDisplay(it) === label && Number(it.amount) === Number(amount)));
-      await setDoc(ref, { date: dateStr, type: type, items });
-    }
-
-    // "Ledger Book" report: the full Company Ledger, one saved date per page,
-    // newest date first — same line items as the Company Ledger tab/card, but
-    // for every saved date in a range, continuous and printable.
-    async function fsGetLedgerBookReport(startDate, endDate) {
-      const [ledgerSnap, expensesSnap, entriesSnap, names] = await Promise.all([
-        getDocs(query(collection(db, "companyLedger"), where("date", ">=", startDate), where("date", "<=", endDate))),
-        getDocs(query(collection(db, "expenses"), where("date", ">=", startDate), where("date", "<=", endDate))),
-        getDocs(query(collection(db, "entries"), where("date", ">=", startDate), where("date", "<=", endDate))),
-        fsGetWorkerNames(),
-      ]);
-
-      const expensesByDate = {};
-      expensesSnap.forEach((d) => {
-        const r = d.data();
-        expensesByDate[r.date] = expensesByDate[r.date] || {};
-        expensesByDate[r.date][r.type] = r.items || [];
-      });
-
-      const entriesByDate = {};
-      entriesSnap.forEach((d) => {
-        const r = d.data();
-        (entriesByDate[r.date] = entriesByDate[r.date] || []).push(r);
-      });
-
-      const ledgerDocs = ledgerSnap.docs.map((d) => d.data()).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)); // newest first
-
-      const days = ledgerDocs.map((l) => {
-        const de = expensesByDate[l.date] || {};
-        const advanceRows = (entriesByDate[l.date] || [])
-          .filter((r) => (Number(r.patti) || 0) > 0)
-          .map((r) => ({
-            section: r.section, number: r.number, patti: Number(r.patti) || 0,
-            name: lookupWorkerName(names, identityPool(r.section), r.number),
-          }));
-        return {
-          date: l.date, ob: Number(l.ob) || 0, advanceCO: Number(l.advanceCO) || 0, advanceSPSpl: Number(l.advanceSPSpl) || 0,
-          incomeItems: de.Income || [], grossWage: Number(l.grossWage) || 0,
-          staffItems: de.StaffPayment || [], otherItems: de.OtherDaily || [], nonDailyItems: de.NonDaily || [],
-          pattiTotal: Number(l.pattiTotal) || 0, othersTotal: Number(l.othersTotal) || 0,
-          totalIncome: Number(l.totalIncome) || 0, totalExpense: Number(l.totalExpense) || 0,
-          cb: Number(l.cb) || 0, advanceRows,
-        };
-      });
-
-      return { startDate, endDate, days };
     }
 
     function identityPool(section) {
@@ -1698,13 +1506,152 @@
     }
 
     /* ================= Tabs ================= */
-    const ALL_TABS = ["home", "entry", "ledger", "stock", "settings", "reports"];
-    let historyDepth = 0; // 0 = at Home, 1 = in a sub-tab
+    
+    /* ---------------- Raw material: leaf / tobacco ---------------- */
+    const MAT_SECS = ["CO", "SP", "Spl"];
+    const MAT_NAME = { leaf: "Leaf", tobacco: "Tobacco" };
+    let matDefaults = [], matPurchases = [];
+    const mid = (id) => document.getElementById(id);
+    const mn = (v) => Number(v) || 0;
+    const mr = (v) => Math.round(v * 100) / 100;
+    const mesc = (t) => String(t == null ? "" : t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-    // When a Period Report line is clicked to edit it, this remembers where to
-    // jump back to (which report, its date range/view, and scroll position) so
-    // saving the Company Ledger returns straight to that same, refreshed view.
-    let returnAfterLedgerSave = null;
+    async function loadMatDefaults() {
+      const snap = await getDocs(collection(db, "materialDefaults"));
+      matDefaults = snap.docs.map((d) => d.data()).sort((a, b) => (a.effectiveFrom < b.effectiveFrom ? -1 : 1));
+    }
+    function matRatesFor(date) {
+      let r = null;
+      matDefaults.forEach((t) => { if (t.effectiveFrom <= date) r = t.rates; });
+      return r || {};
+    }
+    window.renderMatDefaults = async function () {
+      await loadMatDefaults();
+      const last = matDefaults.length ? matDefaults[matDefaults.length - 1].rates : {};
+      MAT_SECS.forEach((k) => ["leaf", "tobacco"].forEach((i) => { mid("md-" + k + "-" + i).value = (last[k] && last[k][i]) || ""; }));
+      mid("matdef-list").innerHTML = matDefaults.slice().reverse().map((t) =>
+        `<div class="field-row"><span>From <b>${dispDate(t.effectiveFrom)}</b> — ` + MAT_SECS.map((k) => `${k}: ${mn(t.rates[k] && t.rates[k].leaf)}/${mn(t.rates[k] && t.rates[k].tobacco)}`).join(" · ") +
+        ` <button class="mbtn" onclick="delMatDefault('${t.effectiveFrom}')">✕</button></span></div>`).join("") + (matDefaults.length ? '<div class="stock-sub">Format: leaf Kg / tobacco Kg per worker</div>' : "");
+    };
+    window.saveMatDefault = async function () {
+      const eff = mid("md-date").value;
+      if (!eff) { alert("Choose the effective-from date"); return; }
+      const rates = {};
+      MAT_SECS.forEach((k) => { rates[k] = { leaf: mn(mid("md-" + k + "-leaf").value), tobacco: mn(mid("md-" + k + "-tobacco").value) }; });
+      await setDoc(doc(db, "materialDefaults", eff), { effectiveFrom: eff, rates });
+      await renderMatDefaults();
+    };
+    window.delMatDefault = async function (eff) {
+      if (!confirm("Delete this default?")) return;
+      await deleteDoc(doc(db, "materialDefaults", eff));
+      await renderMatDefaults();
+    };
+
+    // Only workers with a beedi count > 0 on a day are counted as having received material.
+    function matAccumulate(docs) {
+      const days = {}, workers = {};
+      docs.forEach((s) => {
+        const d = s.data(), b = mn(d.beedi);
+        if (b <= 0) return;
+        const x = matRatesFor(d.date)[d.section] || {}, lf = mn(x.leaf), tb = mn(x.tobacco);
+        const D = days[d.date] = days[d.date] || { CO: 0, SP: 0, Spl: 0, leaf: 0, tobacco: 0 };
+        D[d.section] = (D[d.section] || 0) + 1; D.leaf += lf; D.tobacco += tb;
+        const k = String(d.number), W = workers[k] = workers[k] || { number: k, days: 0, beedi: 0, leaf: 0, tobacco: 0 };
+        W.days++; W.beedi += b; W.leaf += lf; W.tobacco += tb;
+      });
+      return { days, workers };
+    }
+
+    window.loadMaterial = async function () {
+      if (!mid("mp-date").value) mid("mp-date").value = todayStr();
+      if (!mid("mr-end").value) {
+        mid("mr-end").value = todayStr();
+        mid("mr-start").value = new Date(Date.now() - 90 * 864e5).toISOString().slice(0, 10);
+      }
+      await loadMatDefaults();
+      await renderMatPurchases();
+    };
+
+    async function renderMatPurchases() {
+      const snap = await getDocs(collection(db, "rawPurchases"));
+      matPurchases = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (a.date < b.date ? 1 : -1));
+      let out = 0;
+      const rows = matPurchases.map((p) => {
+        const paid = (p.payments || []).reduce((s, x) => s + mn(x.amount), 0), bal = mn(p.amount) - paid;
+        out += bal;
+        const pays = (p.payments || []).map((x, i) => `<div style="font-size:11.5px;color:var(--ink-soft)">${dispDate(x.date)} · ₹${mn(x.amount)} ${mesc(x.note)} <button class="mbtn" onclick="delMatPayment('${p.id}',${i})">✕</button></div>`).join("");
+        return `<div style="border-bottom:1px dashed #D3DFD3;padding:6px 0">
+          <div class="field-row" style="padding:0"><span><b>${dispDate(p.date)}</b> · ${MAT_NAME[p.item] || p.item} · ${mn(p.kg)} Kg × ${mn(p.rate)}</span><b class="num">₹${mn(p.amount)}</b></div>
+          ${p.desc ? `<div style="font-size:12px">${mesc(p.desc)}</div>` : ""}${pays}
+          <div class="field-row" style="padding:2px 0"><span><button class="mbtn" onclick="addMatPayment('${p.id}')">+ Payment</button><button class="mbtn" onclick="delMatPurchase('${p.id}')">Delete</button></span>
+          <b class="num" style="color:${bal > 0 ? "var(--rule)" : "inherit"}">Balance ₹${bal}</b></div></div>`;
+      }).join("");
+      mid("mat-purchases").innerHTML = (matPurchases.length ? `<div class="field-row" style="padding:2px 0"><b>Total to pay</b><b class="num" style="color:var(--rule)">₹${out}</b></div>` : "No purchases yet.") + rows;
+      await renderMatStock();
+    }
+
+    async function renderMatStock() {
+      const el = mid("mat-stock");
+      if (!matPurchases.length) { el.innerHTML = '<div class="field-row">Add purchases (or an opening-stock entry) to see stock.</div>'; return; }
+      const from = matPurchases.map((p) => p.date).sort()[0];
+      const snap = await getDocs(query(collection(db, "entries"), where("date", ">=", from)));
+      const { days } = matAccumulate(snap.docs);
+      const issued = { leaf: 0, tobacco: 0 };
+      Object.values(days).forEach((D) => { issued.leaf += D.leaf; issued.tobacco += D.tobacco; });
+      el.innerHTML = ["leaf", "tobacco"].map((i) => {
+        const bought = matPurchases.filter((p) => p.item === i).reduce((s, p) => s + mn(p.kg), 0), bal = mr(bought - issued[i]);
+        return `<div class="field-row"><span><b>${MAT_NAME[i]}</b> — Bought ${mr(bought)} · Issued ${mr(issued[i])}</span><b class="num" style="color:${bal < 0 ? "var(--rule)" : "inherit"}">${bal} Kg</b></div>`;
+      }).join("") + `<div class="stock-sub" style="padding:0 10px">Issue counted from ${dispDate(from)} (earliest purchase). Enter opening stock as a purchase dated before that.</div>`;
+    }
+
+    window.saveMatPurchase = async function () {
+      const date = mid("mp-date").value, kg = mn(mid("mp-kg").value), rate = mn(mid("mp-rate").value), paid = mn(mid("mp-paid").value);
+      if (!date || kg <= 0) { mid("mat-status").textContent = "Enter date and Kg"; return; }
+      const payments = paid > 0 ? [{ date, amount: paid, note: "At purchase" }] : [];
+      await setDoc(doc(collection(db, "rawPurchases")), { date, item: mid("mp-item").value, kg, rate, amount: Math.round(kg * rate), desc: mid("mp-desc").value.trim(), payments });
+      ["mp-kg", "mp-rate", "mp-paid", "mp-desc"].forEach((i) => { mid(i).value = ""; });
+      mid("mat-status").textContent = "Saved";
+      await renderMatPurchases();
+    };
+    async function matSavePurchaseDoc(p) { const { id, ...rest } = p; await setDoc(doc(db, "rawPurchases", id), rest); await renderMatPurchases(); }
+    window.addMatPayment = async function (id) {
+      const p = matPurchases.find((x) => x.id === id), a = mn(prompt("Payment amount"));
+      if (!p || a <= 0) return;
+      const dt = prompt("Payment date (YYYY-MM-DD)", todayStr()) || todayStr(), note = prompt("Note (optional)") || "";
+      p.payments = (p.payments || []).concat([{ date: dt, amount: a, note }]);
+      await matSavePurchaseDoc(p);
+    };
+    window.delMatPayment = async function (id, i) {
+      const p = matPurchases.find((x) => x.id === id);
+      if (!p || !confirm("Delete this payment?")) return;
+      p.payments.splice(i, 1);
+      await matSavePurchaseDoc(p);
+    };
+    window.delMatPurchase = async function (id) {
+      if (!confirm("Delete this purchase and its payments?")) return;
+      await deleteDoc(doc(db, "rawPurchases", id));
+      await renderMatPurchases();
+    };
+
+    window.loadMatReport = async function () {
+      const s = mid("mr-start").value, e = mid("mr-end").value, body = mid("mat-report");
+      if (!s || !e) return;
+      body.textContent = "Loading...";
+      await loadMatDefaults();
+      const snap = await getDocs(query(collection(db, "entries"), where("date", ">=", s), where("date", "<=", e)));
+      const { days, workers } = matAccumulate(snap.docs);
+      const ws = Object.values(workers).sort((a, b) => (mn(a.number) - mn(b.number)) || String(a.number).localeCompare(String(b.number)));
+      const T = ws.reduce((t, w) => ({ days: t.days + w.days, beedi: t.beedi + w.beedi, leaf: t.leaf + w.leaf, tobacco: t.tobacco + w.tobacco }), { days: 0, beedi: 0, leaf: 0, tobacco: 0 });
+      const per = (b, kg) => (kg > 0 ? mr(b / kg) : "-");
+      const wrow = (w, bold) => `<tr${bold ? ' style="font-weight:bold"' : ""}><td>${w.number}</td><td>${w.days}</td><td>${w.beedi}</td><td>${mr(w.leaf)}</td><td>${mr(w.tobacco)}</td><td>${per(w.beedi, w.leaf)}</td><td>${per(w.beedi, w.tobacco)}</td></tr>`;
+      const dts = Object.keys(days).sort().reverse();
+      body.innerHTML = `<div class="expense-title">Worker-wise</div><div class="rows-scroll"><table class="report-table"><tr><th>No.</th><th>Days</th><th>Production (kettu)</th><th>Leaf Kg</th><th>Tobacco Kg</th><th>Kettu/Kg leaf</th><th>Kettu/Kg tobacco</th></tr>${ws.map((w) => wrow(w)).join("")}${wrow({ number: "Total", ...T }, true)}</table></div>
+        <div class="expense-title" style="margin-top:12px">Date-wise</div><div class="rows-scroll"><table class="report-table"><tr><th>Date</th><th>CO</th><th>SP</th><th>Spl</th><th>Leaf Kg</th><th>Tobacco Kg</th></tr>${dts.map((d) => `<tr><td>${dispDate(d)}</td><td>${days[d].CO}</td><td>${days[d].SP}</td><td>${days[d].Spl}</td><td>${mr(days[d].leaf)}</td><td>${mr(days[d].tobacco)}</td></tr>`).join("")}</table></div>
+        <div class="stock-sub">CO / SP / Spl = number of workers with a beedi count that day.${matDefaults.length ? "" : " Set the per-worker Kg in Settings first."}</div>`;
+    };
+
+    const ALL_TABS = ["home", "entry", "ledger", "stock", "material", "settings", "reports"];
+    let historyDepth = 0; // 0 = at Home, 1 = in a sub-tab
 
     function applyTab(name) {
       ALL_TABS.forEach((t) => {
@@ -1714,12 +1661,12 @@
       if (name === "home") loadHomeDashboard();
       if (name === "ledger") loadLedger();
       if (name === "stock") loadStock();
-      if (name === "settings") { loadSettings(); loadRateTablesUI(); }
+      if (name === "material") loadMaterial();
+      if (name === "settings") { loadSettings(); loadRateTablesUI(); renderMatDefaults(); }
       if (name === "reports") switchReport("daily");
     }
 
     window.switchTab = function (name) {
-      if (name !== "ledger") returnAfterLedgerSave = null; // abandoning the edit-and-return flow
       applyTab(name);
       if (name === "home") {
         if (historyDepth === 1) { history.replaceState({ tab: "home" }, "", "#home"); historyDepth = 0; }
@@ -1800,7 +1747,7 @@
           <div class="rows-scroll">
             <table>
               <thead><tr>
-                <th>No.</th><th>Beedi</th><th>Wage</th><th>Deposit</th><th>Balance</th><th>Advance</th>
+                <th>No.</th><th>Beedi</th><th>Wage</th><th>Deposit</th><th>Balance</th><th>Advance</th><th>Others</th>
               </tr></thead>
               <tbody id="tbody-${sec.key}"></tbody>
             </table>
@@ -1818,6 +1765,7 @@
             <td><input type="text" inputmode="numeric" value="${bz(r.advance)}" data-sec="${sec.key}" data-idx="${idx}" data-field="advance" oninput="onCellInput(this)"></td>
             <td class="readonly balance" id="balance-${sec.key}-${idx}">${bz(r.balance)}</td>
             <td><input type="text" inputmode="numeric" value="${bz(r.patti)}" data-sec="${sec.key}" data-idx="${idx}" data-field="patti" oninput="onCellInput(this)"></td>
+            <td><input type="text" inputmode="numeric" value="${bz(r.others)}" data-sec="${sec.key}" data-idx="${idx}" data-field="others" oninput="onCellInput(this)"></td>
           `;
           tbody.appendChild(tr);
         });
@@ -1849,25 +1797,17 @@
       (expensesData[type] || []).forEach((it, idx) => {
         const row = document.createElement("div");
         row.className = "expense-row";
-        if (type === "OtherDaily") {
-          row.innerHTML = `
-            <input class="item" type="text" placeholder="Item" value="${itemName(it)}" data-type="${type}" data-idx="${idx}" data-field="item" oninput="onExpenseInput(this)">
-            <input class="desc-inline" type="text" placeholder="Description" value="${itemDesc(it)}" data-type="${type}" data-idx="${idx}" data-field="description" oninput="onExpenseInput(this)">
-            <input class="amount" type="text" inputmode="numeric" value="${it.amount || ''}" data-type="${type}" data-idx="${idx}" data-field="amount" oninput="onExpenseInput(this)">
-          `;
-        } else {
-          row.innerHTML = `
-            <input class="label" type="text" value="${it.label || ''}" data-type="${type}" data-idx="${idx}" data-field="label" oninput="onExpenseInput(this)">
-            <input class="amount" type="text" inputmode="numeric" value="${it.amount || ''}" data-type="${type}" data-idx="${idx}" data-field="amount" oninput="onExpenseInput(this)">
-          `;
-        }
+        row.innerHTML = `
+          <input class="label" type="text" value="${it.label || ''}" data-type="${type}" data-idx="${idx}" data-field="label" oninput="onExpenseInput(this)">
+          <input class="amount" type="text" inputmode="numeric" value="${it.amount || ''}" data-type="${type}" data-idx="${idx}" data-field="amount" oninput="onExpenseInput(this)">
+        `;
         c.appendChild(row);
       });
     }
 
     window.addExpense = function (type) {
       expensesData[type] = expensesData[type] || [];
-      expensesData[type].push(type === "OtherDaily" ? { item: "", description: "", amount: "" } : { label: "", amount: "" });
+      expensesData[type].push({ label: "", amount: "" });
       renderExpenses();
     };
 
@@ -1930,7 +1870,7 @@
     function buildEntrySummaryRows(sec) {
       return (entriesData[sec.key] || [])
         .filter((r) => (Number(r.beedi) || 0) > 0 || (Number(r.advance) || 0) > 0 || (Number(r.patti) || 0) > 0 || (Number(r.others) || 0) !== 0)
-        .map((r) => `<tr><td>${r.number}</td><td class="num">${r.beedi || 0}</td><td class="num">${r.kooli || 0}</td><td class="num">${r.advance || 0}</td><td class="num">${r.balance || 0}</td><td class="num">${r.patti || 0}</td></tr>`)
+        .map((r) => `<tr><td>${r.number}</td><td class="num">${r.beedi || 0}</td><td class="num">${r.kooli || 0}</td><td class="num">${r.advance || 0}</td><td class="num">${r.balance || 0}</td><td class="num">${r.patti || 0}</td><td class="num">${r.others || 0}</td></tr>`)
         .join("");
     }
 
@@ -1942,15 +1882,15 @@
         if (!rows) return;
         html += `<div style="margin-top:8px;"><b>${sec.label}</b></div>
           <table style="width:100%; margin-bottom:6px;">
-            <tr><th>No.</th><th>Beedi</th><th>Wage</th><th>Deposit</th><th>Balance</th><th>Advance</th></tr>
+            <tr><th>No.</th><th>Beedi</th><th>Wage</th><th>Deposit</th><th>Balance</th><th>Advance</th><th>Others</th></tr>
             ${rows}
           </table>`;
       });
 
       const staffRows = (expensesData.StaffPayment || []).filter((it) => it.label || it.amount)
         .map((it) => `<div class="field-row"><span>${it.label}</span><span class="num">${it.amount || 0}</span></div>`).join("");
-      const otherRows = (expensesData.OtherDaily || []).filter((it) => itemName(it) || itemDesc(it) || it.amount)
-        .map((it) => `<div class="field-row"><span>${itemDisplay(it)}</span><span class="num">${it.amount || 0}</span></div>`).join("");
+      const otherRows = (expensesData.OtherDaily || []).filter((it) => it.label || it.amount)
+        .map((it) => `<div class="field-row"><span>${it.label}</span><span class="num">${it.amount || 0}</span></div>`).join("");
 
       html += `<div class="divider"></div>
         <div class="field-row"><span>Cash in Hand</span><span class="num">${document.getElementById("cash-in-hand").value || 0}</span></div>
@@ -2106,19 +2046,13 @@
       return `<tr><td>${label}</td><td>${incomeCell}</td><td>${expenseCell}</td></tr>`;
     }
 
-    function ledgerEditableRow(item, description, amount, side, tag, idx) {
+    function ledgerEditableRow(label, amount, side, tag, idx) {
       const incomeCell = side === "income"
         ? `<input class="amt" type="text" inputmode="numeric" value="${amount}" data-tag="${tag}" data-idx="${idx}" data-field="amount" oninput="onLedgerItemInput(this)">` : "";
       const expenseCell = side === "expense"
         ? `<input class="amt" type="text" inputmode="numeric" value="${amount}" data-tag="${tag}" data-idx="${idx}" data-field="amount" oninput="onLedgerItemInput(this)">` : "";
       return `<tr>
-        <td>
-          <div style="display:flex; gap:4px; align-items:center;">
-            <input class="desc" type="text" placeholder="Item" value="${item}" data-tag="${tag}" data-idx="${idx}" data-field="item" oninput="onLedgerItemInput(this)" style="font-weight:600;">
-            <button type="button" title="Remove this line" onclick="removeLedgerItem('${tag}',${idx})" style="flex:0 0 auto; border:1px solid #CBD8CC; background:#fff; border-radius:3px; color:var(--rule); font-weight:bold; padding:2px 7px; cursor:pointer;">✕</button>
-          </div>
-          <input class="desc" type="text" placeholder="Description" value="${description}" data-tag="${tag}" data-idx="${idx}" data-field="description" oninput="onLedgerItemInput(this)" style="margin-top:2px; font-size:11px; color:var(--ink-soft);">
-        </td>
+        <td><input class="desc" type="text" value="${label}" data-tag="${tag}" data-idx="${idx}" data-field="label" oninput="onLedgerItemInput(this)"></td>
         <td>${incomeCell}</td><td>${expenseCell}</td>
       </tr>`;
     }
@@ -2130,13 +2064,13 @@
       let rows = "";
       if (ledgerData.advanceCO > 0) rows += ledgerFixedRow("Deposit CO", ledgerData.advanceCO, "income");
       if (ledgerData.advanceSPSpl > 0) rows += ledgerFixedRow("Deposit SP+Spl", ledgerData.advanceSPSpl, "income");
-      (ledgerData.incomeItems || []).forEach((it, idx) => { rows += ledgerEditableRow(itemName(it), itemDesc(it), it.amount || "", "income", "income", idx); });
+      (ledgerData.incomeItems || []).forEach((it, idx) => { rows += ledgerEditableRow(it.label || "", it.amount || "", "income", "income", idx); });
       rows += `<tr class="ledger-add-row"><td colspan="3"><button class="add-row-btn" onclick="addLedgerItem('income')">+ Add Income</button></td></tr>`;
 
       if (ledgerData.grossWage > 0) rows += ledgerFixedRow("Wage", ledgerData.grossWage, "expense");
-      (ledgerData.staffItems || []).filter((it) => Number(it.amount) > 0).forEach((it) => { rows += ledgerFixedRow(itemDisplay(it), it.amount, "expense"); });
-      (ledgerData.otherItems || []).filter((it) => Number(it.amount) > 0).forEach((it) => { rows += ledgerFixedRow(itemDisplay(it), it.amount, "expense"); });
-      (ledgerData.nonDailyItems || []).forEach((it, idx) => { rows += ledgerEditableRow(itemName(it), itemDesc(it), it.amount || "", "expense", "nonDaily", idx); });
+      (ledgerData.staffItems || []).filter((it) => Number(it.amount) > 0).forEach((it) => { rows += ledgerFixedRow(it.label, it.amount, "expense"); });
+      (ledgerData.otherItems || []).filter((it) => Number(it.amount) > 0).forEach((it) => { rows += ledgerFixedRow(it.label, it.amount, "expense"); });
+      (ledgerData.nonDailyItems || []).forEach((it, idx) => { rows += ledgerEditableRow(it.label || "", it.amount || "", "expense", "nonDaily", idx); });
       rows += `<tr class="ledger-add-row"><td colspan="3"><button class="add-row-btn" onclick="addLedgerItem('nonDaily')">+ Add Expense</button></td></tr>`;
 
       if (ledgerData.pattiTotal > 0) rows += ledgerFixedRow("Advance", ledgerData.pattiTotal, "expense");
@@ -2186,7 +2120,7 @@
     window.addLedgerItem = function (tag) {
       const key = tag === "income" ? "incomeItems" : "nonDailyItems";
       ledgerData[key] = ledgerData[key] || [];
-      ledgerData[key].push({ item: "", description: "", amount: "" });
+      ledgerData[key].push({ label: "", amount: "" });
       renderLedgerTable();
     };
 
@@ -2197,16 +2131,6 @@
       if (field === "amount") recalcLedgerDisplay();
     };
 
-    // Removes a wrongly-added/duplicated Income or (Non-Daily) Expense line
-    // entirely, rather than only zeroing its amount — needed to clean up items
-    // like a stray "കൂലി" expense line that duplicates the auto Wage row.
-    window.removeLedgerItem = function (tag, idx) {
-      const key = tag === "income" ? "incomeItems" : "nonDailyItems";
-      ledgerData[key].splice(idx, 1);
-      renderLedgerTable();
-      recalcLedgerDisplay();
-    };
-
     function setLedgerStatus(msg) { document.getElementById("ledger-status").textContent = msg; }
 
     window.openLedgerReview = function () {
@@ -2215,11 +2139,11 @@
       let rows = "";
       if (ledgerData.advanceCO > 0) rows += ledgerFixedRow("Deposit CO", ledgerData.advanceCO, "income");
       if (ledgerData.advanceSPSpl > 0) rows += ledgerFixedRow("Deposit SP+Spl", ledgerData.advanceSPSpl, "income");
-      (ledgerData.incomeItems || []).filter((it) => Number(it.amount) > 0).forEach((it) => { rows += ledgerFixedRow(itemDisplay(it), it.amount, "income"); });
+      (ledgerData.incomeItems || []).filter((it) => Number(it.amount) > 0).forEach((it) => { rows += ledgerFixedRow(it.label, it.amount, "income"); });
       if (ledgerData.grossWage > 0) rows += ledgerFixedRow("Wage", ledgerData.grossWage, "expense");
-      (ledgerData.staffItems || []).filter((it) => Number(it.amount) > 0).forEach((it) => { rows += ledgerFixedRow(itemDisplay(it), it.amount, "expense"); });
-      (ledgerData.otherItems || []).filter((it) => Number(it.amount) > 0).forEach((it) => { rows += ledgerFixedRow(itemDisplay(it), it.amount, "expense"); });
-      (ledgerData.nonDailyItems || []).filter((it) => Number(it.amount) > 0).forEach((it) => { rows += ledgerFixedRow(itemDisplay(it), it.amount, "expense"); });
+      (ledgerData.staffItems || []).filter((it) => Number(it.amount) > 0).forEach((it) => { rows += ledgerFixedRow(it.label, it.amount, "expense"); });
+      (ledgerData.otherItems || []).filter((it) => Number(it.amount) > 0).forEach((it) => { rows += ledgerFixedRow(it.label, it.amount, "expense"); });
+      (ledgerData.nonDailyItems || []).filter((it) => Number(it.amount) > 0).forEach((it) => { rows += ledgerFixedRow(it.label, it.amount, "expense"); });
       if (ledgerData.pattiTotal > 0) rows += ledgerFixedRow("Advance", ledgerData.pattiTotal, "expense");
       if (ledgerData.othersTotal > 0) rows += ledgerFixedRow("Others", ledgerData.othersTotal, "income");
       if (ledgerData.othersTotal < 0) rows += ledgerFixedRow("Others", -ledgerData.othersTotal, "expense");
@@ -2247,11 +2171,6 @@
         closeLedgerReview();
         setLedgerStatus("Saved — CB: " + res.closingBalance);
         clearLedgerScreen();
-        if (returnAfterLedgerSave) {
-          const r = returnAfterLedgerSave;
-          returnAfterLedgerSave = null;
-          await goBackToReport(r);
-        }
       } catch (err) {
         alert("Error: " + err.message);
       }
@@ -2271,88 +2190,17 @@
 
     window.switchReport = function (kind) {
       currentReport = kind;
-      ["daily", "period", "book", "due", "stockbook", "full"].forEach((k) => document.getElementById("rbtn-" + k).classList.toggle("active", k === kind));
+      ["daily", "period", "due", "stockbook", "full"].forEach((k) => document.getElementById("rbtn-" + k).classList.toggle("active", k === kind));
       renderReportControls();
     };
 
     let stockBookItem = "ORD";
-    let periodViewMode = "date"; // "date" | "item" — how Period Report's Income/Expense lists are arranged
-
-    window.setPeriodViewMode = function (mode) {
-      periodViewMode = mode;
-      const btnDate = document.getElementById("pv-date"), btnItem = document.getElementById("pv-item");
-      if (btnDate) btnDate.classList.toggle("active", mode === "date");
-      if (btnItem) btnItem.classList.toggle("active", mode === "item");
-      if (currentReport === "period" && lastReportData) renderPeriodReport(lastReportData);
-    };
-
-    // Jumps to the Company Ledger tab pre-loaded on a specific date, so a line
-    // seen in a Period Report can be opened and edited directly. Remembers the
-    // Period Report's date range, arrangement and scroll position so saving
-    // the ledger returns straight back to the same, refreshed view.
-    window.editPeriodLine = function (dateStr) {
-      const startEl = document.getElementById("report-start-date"), endEl = document.getElementById("report-end-date");
-      returnAfterLedgerSave = {
-        kind: currentReport,
-        start: startEl ? startEl.value : "",
-        end: endEl ? endEl.value : "",
-        viewMode: periodViewMode,
-        scrollY: window.scrollY,
-      };
-      document.getElementById("ledger-date-input").value = dateStr;
-      window.switchTab("ledger");
-    };
-
-    // Switches straight to a given report (bypassing the normal Reports-tab
-    // default of "daily"), restoring its date range/arrangement and reloading
-    // it fresh, then restoring the scroll position. Used after editing a
-    // Company Ledger line reached from a report.
-    async function goBackToReport(r) {
-      ALL_TABS.forEach((t) => {
-        document.getElementById("tab-" + t).style.display = t === "reports" ? "" : "none";
-        document.getElementById("tabbtn-" + t).classList.toggle("active", t === "reports");
-      });
-      if (historyDepth === 0) { history.pushState({ tab: "reports" }, "", "#reports"); historyDepth = 1; }
-      else { history.replaceState({ tab: "reports" }, "", "#reports"); }
-      currentReport = r.kind;
-      ["daily", "period", "book", "due", "stockbook", "full"].forEach((k) => document.getElementById("rbtn-" + k).classList.toggle("active", k === r.kind));
-      renderReportControls();
-      if (r.kind === "period") {
-        periodViewMode = r.viewMode || "date";
-        const startEl = document.getElementById("report-start-date"), endEl = document.getElementById("report-end-date");
-        if (startEl) startEl.value = r.start || todayStr();
-        if (endEl) endEl.value = r.end || todayStr();
-        const btnDate = document.getElementById("pv-date"), btnItem = document.getElementById("pv-item");
-        if (btnDate) btnDate.classList.toggle("active", periodViewMode === "date");
-        if (btnItem) btnItem.classList.toggle("active", periodViewMode === "item");
-        await window.loadPeriodReport();
-      }
-      requestAnimationFrame(() => window.scrollTo(0, r.scrollY || 0));
-    }
-
-    // Groups Income/Non-Daily lines strictly by their "item" (e.g. Sale, Rent),
-    // ignoring the per-entry "description" — so the same item entered with a
-    // different description each time (e.g. "SALE 278+132" vs "SALE 145+90")
-    // still lands in one group, instead of splitting into separate ones.
-    function groupReportListByItem(list) {
-      const groups = {};
-      (list || []).forEach((it) => {
-        const key = (it.item || "").trim() || "(no item)";
-        (groups[key] = groups[key] || []).push(it);
-      });
-      return Object.keys(groups).sort((a, b) => a.localeCompare(b)).map((item) => {
-        const items = groups[item].slice().sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-        const subtotal = items.reduce((s, it) => s + (Number(it.amount) || 0), 0);
-        return { item, items, subtotal };
-      });
-    }
 
     window.exportReportToExcel = function () {
       if (!lastReportData) { alert("Please load a report first"); return; }
       const wb = XLSX.utils.book_new();
       if (currentReport === "daily") buildDailyReportWorkbook(wb, lastReportData);
       else if (currentReport === "period") buildPeriodReportWorkbook(wb, lastReportData);
-      else if (currentReport === "book") buildLedgerBookWorkbook(wb, lastReportData);
       else if (currentReport === "due") buildWorkerDueWorkbook(wb, lastReportData);
       else if (currentReport === "stockbook") buildStockBookWorkbook(wb, lastReportData);
       else if (currentReport === "full") buildWorkerFullWorkbook(wb, lastReportData);
@@ -2374,12 +2222,12 @@
       });
       const l = data.ledger;
       const led = [["Item", "Amount"], ["Date", data.date], ["OB", l.ob], ["Deposit CO", l.advanceCO], ["Deposit SP+Spl", l.advanceSPSpl]];
-      (l.incomeItems || []).forEach((it) => led.push([itemDisplay(it), it.amount]));
+      (l.incomeItems || []).forEach((it) => led.push([it.label, it.amount]));
       led.push(["Total Income", l.totalIncome]);
       led.push(["Wage", l.grossWage]);
-      (l.staffItems || []).forEach((it) => led.push([itemDisplay(it), it.amount]));
-      (l.otherItems || []).forEach((it) => led.push([itemDisplay(it), it.amount]));
-      (l.nonDailyItems || []).forEach((it) => led.push([itemDisplay(it), it.amount]));
+      (l.staffItems || []).forEach((it) => led.push([it.label, it.amount]));
+      (l.otherItems || []).forEach((it) => led.push([it.label, it.amount]));
+      (l.nonDailyItems || []).forEach((it) => led.push([it.label, it.amount]));
       led.push(["Total Expense", l.totalExpense]);
       led.push(["CB", l.closingBalance]);
       addSheetFromAOA(wb, "CompanyLedger", led);
@@ -2393,12 +2241,12 @@
         addSheetFromAOA(wb, sec.label, aoa);
       });
       const summary = [["Item", "Amount"], ["Period", data.startDate + " to " + data.endDate], ["OB", data.periodOB], ["Deposit CO", data.advanceCO], ["Deposit SP+Spl", data.advanceSPSpl]];
-      data.incomeList.forEach((it) => summary.push([it.date + " — " + it.item + (it.description ? " (" + it.description + ")" : ""), it.amount]));
+      data.incomeList.forEach((it) => summary.push([it.date + " — " + it.label, it.amount]));
       summary.push(["Total Income", data.expenseTotals.Income + data.advanceCO + data.advanceSPSpl]);
       summary.push(["Wage (Total)", data.grossWage]);
       Object.keys(data.staffByLabel).forEach((k) => summary.push([k, data.staffByLabel[k]]));
       Object.keys(data.otherByLabel).forEach((k) => summary.push([k, data.otherByLabel[k]]));
-      data.nonDailyList.forEach((it) => summary.push([it.date + " — " + it.item + (it.description ? " (" + it.description + ")" : ""), it.amount]));
+      data.nonDailyList.forEach((it) => summary.push([it.date + " — " + it.label, it.amount]));
       summary.push(["Advance (Total)", data.pattiTotal]);
       summary.push(["Others (Total)", data.othersTotal]);
       summary.push(["CB (period end)", data.periodCB]);
@@ -2422,28 +2270,6 @@
         w.history.forEach((h) => history.push([w.section, w.number, h.date, h.section, h.patti || 0, h.advance || 0]));
       });
       addSheetFromAOA(wb, "History", history);
-    }
-
-    function buildLedgerCheckWorkbook(wb, data) {
-      const stray = [["Non-Working-Day Dates (likely stray)"]];
-      (data.strayDates || []).forEach((d) => stray.push([d]));
-      addSheetFromAOA(wb, "StrayDates", stray);
-
-      const missing = [["Missing Ledger Save Dates"]];
-      data.missingDates.forEach((d) => missing.push([d]));
-      addSheetFromAOA(wb, "MissingLedger", missing);
-
-      const dbl = [["Date", "Number", "SPBeedi", "SPWage", "SplBeedi", "SplWage"]];
-      (data.doubleBooked || []).forEach((r) => dbl.push([r.date, r.number, r.spBeedi, r.spKooli, r.splBeedi, r.splKooli]));
-      addSheetFromAOA(wb, "DoubleBooked", dbl);
-
-      const dupWage = [["Date", "List", "Label", "Amount", "DayWage"]];
-      (data.duplicateWageItems || []).forEach((it) => dupWage.push([it.date, it.type, it.label, it.amount, it.grossWage]));
-      addSheetFromAOA(wb, "DuplicateWageItems", dupWage);
-
-      const breaks = [["Date", "PrevDate", "PrevCB", "ThisOB", "Diff"]];
-      data.chainBreaks.forEach((b) => breaks.push([b.date, b.prevDate, b.prevCb, b.curOb, b.diff]));
-      addSheetFromAOA(wb, "OBBreaks", breaks);
     }
 
     function buildStockBookWorkbook(wb, data) {
@@ -2493,24 +2319,9 @@
             <span>to</span>
             <input type="date" id="report-end-date">
             <button class="action-btn" onclick="loadPeriodReport()">Load</button>
-          </div>
-          <div class="day-picker">
-            <span style="font-size:12px; color:var(--ink-soft);">Arrange:</span>
-            <button class="day-btn ${periodViewMode === 'date' ? 'active' : ''}" id="pv-date" onclick="setPeriodViewMode('date')">Date-wise</button>
-            <button class="day-btn ${periodViewMode === 'item' ? 'active' : ''}" id="pv-item" onclick="setPeriodViewMode('item')">Item-wise</button>
           </div>`;
         document.getElementById("report-start-date").value = todayStr();
         document.getElementById("report-end-date").value = todayStr();
-      } else if (currentReport === "book") {
-        c.innerHTML = `
-          <div class="day-picker">
-            <input type="date" id="report-book-start">
-            <span>to</span>
-            <input type="date" id="report-book-end">
-            <button class="action-btn" onclick="loadLedgerBook()">Load</button>
-          </div>`;
-        document.getElementById("report-book-start").value = todayStr();
-        document.getElementById("report-book-end").value = todayStr();
       } else if (currentReport === "stockbook") {
         c.innerHTML = `
           <div class="day-picker">
@@ -2556,7 +2367,7 @@
       });
 
       const l = data.ledger;
-      const dlItemRow = (it) => `<div class="field-row"><span>${itemDisplay(it)}</span><span class="num">${it.amount}</span></div>`;
+      const dlItemRow = (it) => `<div class="field-row"><span>${it.label}</span><span class="num">${it.amount}</span></div>`;
       html += `<div class="card"><div class="card-head" style="border-left-color: var(--rule);">Company Ledger</div>
           <div class="field-row"><span>OB</span><span class="num">${l.ob}</span></div>
           <div class="field-row"><span>Deposit CO</span><span class="num">${l.advanceCO}</span></div>
@@ -2603,20 +2414,11 @@
       const otherTotal = Object.values(data.otherByLabel).reduce((s, v) => s + v, 0);
       const totalExpense = data.grossWage + staffTotal + otherTotal + data.expenseTotals.NonDaily + data.pattiTotal;
 
-      const dateWiseLines = (list) => list.map((it) => `<div class="field-row" style="cursor:pointer;" onclick="editPeriodLine('${it.date}')"><span>${dispDate(it.date)} — ${it.item}${it.description ? " (" + it.description + ")" : ""}</span><span class="num">${it.amount}</span></div>`).join("");
-      const itemWiseLines = (list) => groupReportListByItem(list).map((g) => `
-          <div class="field-row" style="background:#EEF3EC;"><b>${g.item}</b><b></b></div>
-          ${g.items.map((it) => `<div class="field-row" style="cursor:pointer; padding-left:20px;" onclick="editPeriodLine('${it.date}')"><span>${dispDate(it.date)}${it.description ? " — " + it.description : ""}</span><span class="num">${it.amount}</span></div>`).join("")}
-          <div class="field-row" style="padding-left:20px;"><span style="font-weight:bold; font-style:italic;">${g.item} Subtotal</span><span class="num" style="font-weight:bold; font-style:italic;">${g.subtotal}</span></div>
-        `).join("");
-      const incomeLinesHtml = periodViewMode === "item" ? itemWiseLines(data.incomeList) : dateWiseLines(data.incomeList);
-      const nonDailyLinesHtml = periodViewMode === "item" ? itemWiseLines(data.nonDailyList) : dateWiseLines(data.nonDailyList);
-
       html += `<div class="card"><div class="card-head" style="border-left-color: var(--rule);">Income (Period)</div>
           <div class="field-row"><span>OB (period start)</span><span class="num">${data.periodOB}</span></div>
           <div class="field-row"><span>Deposit CO</span><span class="num">${data.advanceCO}</span></div>
           <div class="field-row"><span>Deposit SP+Spl</span><span class="num">${data.advanceSPSpl}</span></div>
-          ${incomeLinesHtml}
+          ${data.incomeList.map((it) => `<div class="field-row"><span>${dispDate(it.date)} — ${it.label}</span><span class="num">${it.amount}</span></div>`).join("")}
           <div class="field-row"><b>Total Income</b><b class="num">${data.expenseTotals.Income + data.advanceCO + data.advanceSPSpl}</b></div>
         </div>
 
@@ -2624,7 +2426,7 @@
           <div class="field-row"><span>Wage (Total)</span><span class="num">${data.grossWage}</span></div>
           ${Object.keys(data.staffByLabel).map((k) => `<div class="field-row"><span>${k}</span><span class="num">${data.staffByLabel[k]}</span></div>`).join("")}
           ${Object.keys(data.otherByLabel).map((k) => `<div class="field-row"><span>${k}</span><span class="num">${data.otherByLabel[k]}</span></div>`).join("")}
-          ${nonDailyLinesHtml}
+          ${data.nonDailyList.map((it) => `<div class="field-row"><span>${dispDate(it.date)} — ${it.label}</span><span class="num">${it.amount}</span></div>`).join("")}
           <div class="field-row"><span>Advance (Total)</span><span class="num">${data.pattiTotal}</span></div>
           <div class="field-row"><b>Total Expense</b><b class="num">${totalExpense}</b></div>
         </div>
@@ -2635,71 +2437,6 @@
         </div>`;
 
       body.innerHTML = html;
-    }
-
-    window.loadLedgerBook = async function () {
-      const start = document.getElementById("report-book-start").value;
-      const end = document.getElementById("report-book-end").value;
-      if (!start || !end) return;
-      document.getElementById("report-body").innerHTML = "<p>Loading...</p>";
-      try {
-        const data = await fsGetLedgerBookReport(start, end);
-        lastReportData = data;
-        renderLedgerBookReport(data);
-      } catch (err) {
-        document.getElementById("report-body").innerHTML = "<p>Error: " + err.message + "</p>";
-      }
-    };
-
-    function renderLedgerBookReport(data) {
-      const body = document.getElementById("report-body");
-      let html = `<h1>Ledger Book — ${formatHeadingDate(data.startDate).split(" - ")[0]} → ${formatHeadingDate(data.endDate).split(" - ")[0]}</h1>`;
-      const itemRow = (it) => `<div class="field-row"><span>${itemDisplay(it)}</span><span class="num">${it.amount}</span></div>`;
-
-      if (!data.days.length) {
-        html += `<div class="card"><div style="padding:10px 12px; font-size:13px; color:var(--ink-soft);">No saved Company Ledger entries in this range.</div></div>`;
-      } else {
-        html += data.days.map((d) => {
-          const advanceRowsHtml = d.advanceRows.map((r) => `<div class="field-row"><span>${r.section} #${r.number}${r.name ? " (" + r.name + ")" : ""}</span><span class="num">${r.patti}</span></div>`).join("");
-          return `<div class="card ledger-book-entry">
-            <div class="card-head" style="border-left-color: var(--rule);">${formatHeadingDate(d.date)}</div>
-            <div class="field-row highlight"><b>Old Balance</b><b class="num">${d.ob}</b></div>
-            <div class="field-row"><span>Deposit — CO</span><span class="num">${d.advanceCO}</span></div>
-            <div class="field-row"><span>Deposit — SP+Spl</span><span class="num">${d.advanceSPSpl}</span></div>
-            ${(d.incomeItems || []).filter((it) => Number(it.amount) > 0).map(itemRow).join("")}
-            <div class="field-row"><b>Total Income</b><b class="num">${d.totalIncome}</b></div>
-            <div class="field-row"><span>COOLIE</span><span class="num">${d.grossWage}</span></div>
-            ${(d.staffItems || []).filter((it) => Number(it.amount) > 0).map(itemRow).join("")}
-            ${(d.otherItems || []).filter((it) => Number(it.amount) > 0).map(itemRow).join("")}
-            ${(d.nonDailyItems || []).filter((it) => Number(it.amount) > 0).map(itemRow).join("")}
-            ${d.pattiTotal > 0 ? `<div class="expense-title" style="margin-top:6px;">Advance (worker records)</div>${advanceRowsHtml}<div class="field-row"><b>Advance (Total)</b><b class="num">${d.pattiTotal}</b></div>` : ""}
-            <div class="field-row"><b>Total Expense</b><b class="num">${d.totalExpense}</b></div>
-            <div class="field-row highlight"><b>Cash Balance</b><b class="num">${d.cb}</b></div>
-          </div>`;
-        }).join("");
-      }
-
-      body.innerHTML = html;
-    }
-
-    function buildLedgerBookWorkbook(wb, data) {
-      const aoa = [["Date", "Day", "Description", "Income", "Expense"]];
-      data.days.forEach((d) => {
-        aoa.push([d.date, weekdayName(d.date), "Old Balance", d.ob, ""]);
-        if (d.advanceCO) aoa.push([d.date, "", "Deposit CO", d.advanceCO, ""]);
-        if (d.advanceSPSpl) aoa.push([d.date, "", "Deposit SP+Spl", d.advanceSPSpl, ""]);
-        (d.incomeItems || []).forEach((it) => { if (Number(it.amount) > 0) aoa.push([d.date, "", itemDisplay(it), it.amount, ""]); });
-        aoa.push([d.date, "", "Total Income", d.totalIncome, ""]);
-        aoa.push([d.date, "", "COOLIE", "", d.grossWage]);
-        (d.staffItems || []).forEach((it) => { if (Number(it.amount) > 0) aoa.push([d.date, "", itemDisplay(it), "", it.amount]); });
-        (d.otherItems || []).forEach((it) => { if (Number(it.amount) > 0) aoa.push([d.date, "", itemDisplay(it), "", it.amount]); });
-        (d.nonDailyItems || []).forEach((it) => { if (Number(it.amount) > 0) aoa.push([d.date, "", itemDisplay(it), "", it.amount]); });
-        d.advanceRows.forEach((r) => aoa.push([d.date, "", "Advance — " + r.section + " #" + r.number + (r.name ? " (" + r.name + ")" : ""), "", r.patti]));
-        aoa.push([d.date, "", "Total Expense", "", d.totalExpense]);
-        aoa.push([d.date, "", "Cash Balance", "", d.cb]);
-        aoa.push([]);
-      });
-      addSheetFromAOA(wb, "Ledger Book", aoa);
     }
 
     window.setStockBookItem = function (item) {
@@ -2726,22 +2463,20 @@
       const body = document.getElementById("report-body");
       let html = `<h1>${item} Stock Book — ${formatHeadingDate(start).split(" - ")[0]} → ${formatHeadingDate(end).split(" - ")[0]}</h1>`;
 
-      const fmtBK = (bk) => `${bk.b} b · ${bk.r} k`;
-
       const dayRows = rows.map((r) => {
         const opB = toBundles(r.opening), prB = toBundles(r.production), saB = toBundles(r.sale), shB = toBundles(r.short), clB = toBundles(r.closing);
         return `<tr>
-          <td>${dispDate(r.date)}<br><span style="color:var(--ink-soft); font-size:10.5px;">${weekdayName(r.date)}</span></td>
-          <td>${fmtBK(opB)}</td>
-          <td>${fmtBK(prB)}</td>
-          <td>${fmtBK(saB)}</td>
-          <td class="stock-short${Number(r.short) > 0 ? " has-value" : ""}">${fmtBK(shB)}</td>
-          <td class="stock-closing">${fmtBK(clB)}</td>
+          <td>${dispDate(r.date)} (${weekdayName(r.date)})</td>
+          <td>${opB.b}b ${opB.r}k</td>
+          <td>${prB.b}b ${prB.r}k</td>
+          <td>${saB.b}b ${saB.r}k</td>
+          <td>${shB.b}b ${shB.r}k</td>
+          <td>${clB.b}b ${clB.r}k</td>
         </tr>`;
       }).join("");
 
       html += `<div class="report-section"><h2>Day-wise</h2>
-        <table class="report-table"><thead><tr><th>Date</th><th>Opening</th><th>Production</th><th>Sale</th><th>Short</th><th>Closing</th></tr></thead><tbody>
+        <table class="report-table"><thead><tr><th>Date (Day)</th><th>Opening</th><th>Production</th><th>Sale</th><th>Short</th><th>Closing</th></tr></thead><tbody>
         ${dayRows || '<tr><td colspan="6">No stock data saved for this period.</td></tr>'}
         </tbody></table></div>`;
 
@@ -2753,108 +2488,13 @@
         const opB = toBundles(first.opening), clB = toBundles(last.closing);
         const prB = toBundles(totalProduction), saB = toBundles(totalSale), shB = toBundles(totalShort);
         html += `<div class="card"><div class="card-head" style="border-left-color: var(--rule);">Period Summary</div>
-          <div class="field-row highlight"><b>Opening (period start)</b><b class="num">${fmtBK(opB)}</b></div>
-          <div class="field-row"><span>Production (Total)</span><span class="num">${fmtBK(prB)}</span></div>
-          <div class="field-row"><span>Sale (Total)</span><span class="num">${fmtBK(saB)}</span></div>
-          <div class="field-row"><span>Short (Total)</span><span class="num">${fmtBK(shB)}</span></div>
-          <div class="field-row highlight"><b>Closing (period end)</b><b class="num">${fmtBK(clB)}</b></div>
+          <div class="field-row"><span>Opening (period start)</span><span class="num">${opB.b} bundle, ${opB.r} kettu</span></div>
+          <div class="field-row"><span>Production (Total)</span><span class="num">${prB.b} bundle, ${prB.r} kettu</span></div>
+          <div class="field-row"><span>Sale (Total)</span><span class="num">${saB.b} bundle, ${saB.r} kettu</span></div>
+          <div class="field-row"><span>Short (Total)</span><span class="num">${shB.b} bundle, ${shB.r} kettu</span></div>
+          <div class="field-row"><b>Closing (period end)</b><b class="num">${clB.b} bundle, ${clB.r} kettu</b></div>
         </div>`;
       }
-
-      body.innerHTML = html;
-    }
-
-    let lastLedgerCheckData = null;
-
-    window.loadLedgerCheck = async function () {
-      const start = document.getElementById("settings-lc-start").value;
-      const end = document.getElementById("settings-lc-end").value;
-      if (!start || !end) return;
-      document.getElementById("settings-lc-body").innerHTML = "<p>Loading...</p>";
-      try {
-        const data = await fsGetLedgerCheckReport(start, end);
-        lastLedgerCheckData = data;
-        renderLedgerCheckReport(data);
-      } catch (err) {
-        document.getElementById("settings-lc-body").innerHTML = "<p>Error: " + err.message + "</p>";
-      }
-    };
-
-    window.exportLedgerCheckToExcel = function () {
-      if (!lastLedgerCheckData) { alert("Please load Ledger Check first"); return; }
-      const wb = XLSX.utils.book_new();
-      buildLedgerCheckWorkbook(wb, lastLedgerCheckData);
-      XLSX.writeFile(wb, "RingBeedi-ledgercheck-" + todayStr() + ".xlsx");
-    };
-
-    window.deleteLedgerCheckDate = async function (dateStr) {
-      if (!confirm("Delete ALL data (entries, expenses, stock, ledger, cash) saved for " + dateStr + "? This cannot be undone.")) return;
-      await fsDeleteDayData(dateStr);
-      alert("Deleted " + dateStr + ".");
-      window.loadLedgerCheck();
-    };
-
-    window.deleteDuplicateWageItem = async function (dateStr, type, label, amount) {
-      if (!confirm(`Remove the expense line "${label}" (${amount}) from ${dateStr}'s ${type} list? After this, re-open that date's Entry/Company Ledger tab and Save again so the day's totals recompute correctly.`)) return;
-      await fsRemoveExpenseItem(dateStr, type, label, amount);
-      alert("Removed. Now re-open " + dateStr + " in the Entry or Company Ledger tab and Save to fix that day's totals.");
-      window.loadLedgerCheck();
-    };
-
-    function renderLedgerCheckReport(data) {
-      const body = document.getElementById("settings-lc-body");
-      let html = `<h1 style="font-size:18px;">${formatHeadingDate(data.startDate).split(" - ")[0]} → ${formatHeadingDate(data.endDate).split(" - ")[0]}</h1>`;
-
-      html += `<div class="card"><div class="card-head" style="border-left-color: var(--rule);">Non-Working-Day Entries (likely stray data)</div>
-        <div style="padding:6px 10px; font-size:12px; color:var(--ink-soft);">The company only works Monday and Thursday, but these dates have saved data anyway — almost always a wrongly-typed date (manual entry or bulk import). Check them, and delete if they shouldn't exist.</div>`;
-      if (data.strayDates.length) {
-        html += data.strayDates.map((d) => `<div class="field-row"><span>${dispDate(d)} (${weekdayName(d)})</span><button class="action-btn" style="padding:3px 10px; font-size:12px;" onclick="deleteLedgerCheckDate('${d}')">Delete</button></div>`).join("");
-      } else {
-        html += `<div style="padding:8px 10px; font-size:13px; color:var(--accent-co);">None — no data found on a non-Monday/Thursday date.</div>`;
-      }
-      html += `</div>`;
-
-      html += `<div class="card" style="margin-top:16px;"><div class="card-head" style="border-left-color: var(--rule);">Dates Missing a Saved Company Ledger</div>
-        <div style="padding:6px 10px; font-size:12px; color:var(--ink-soft);">These (working-day) dates have Entry/Expense data but the Company Ledger tab was never opened &amp; saved for them — so their income/expense is counted in the Period Report's totals, but was never folded into the OB → CB chain.</div>`;
-      if (data.missingDates.length) {
-        html += data.missingDates.map((d) => `<div class="field-row"><span>${dispDate(d)} (${weekdayName(d)})</span></div>`).join("");
-      } else {
-        html += `<div style="padding:8px 10px; font-size:13px; color:var(--accent-co);">None — every working-day date with activity has a saved Company Ledger.</div>`;
-      }
-      html += `</div>`;
-
-      html += `<div class="card" style="margin-top:16px;"><div class="card-head" style="border-left-color: var(--rule);">Double-Booked Workers (SP + Spl same date)</div>
-        <div style="padding:6px 10px; font-size:12px; color:var(--ink-soft);">SP and Spl are the same worker pool — one person should have only one row filled per date. These numbers have data entered under BOTH sections on the same date, so that person's wage was counted twice in that day's total. Open the Entry tab for that date and clear the wrong section's row for that worker.</div>`;
-      if (data.doubleBooked.length) {
-        html += `<table class="report-table"><thead><tr><th>Date</th><th>No.</th><th>SP Beedi/Wage</th><th>Spl Beedi/Wage</th></tr></thead><tbody>
-          ${data.doubleBooked.map((r) => `<tr><td>${dispDate(r.date)}</td><td>${r.number}</td><td>${r.spBeedi} / ${r.spKooli}</td><td>${r.splBeedi} / ${r.splKooli}</td></tr>`).join("")}
-          </tbody></table>`;
-      } else {
-        html += `<div style="padding:8px 10px; font-size:13px; color:var(--accent-co);">None — no worker has data under both SP and Spl on the same date.</div>`;
-      }
-      html += `</div>`;
-
-      html += `<div class="card" style="margin-top:16px;"><div class="card-head" style="border-left-color: var(--rule);">Duplicate Wage-Named Expense Items</div>
-        <div style="padding:6px 10px; font-size:12px; color:var(--ink-soft);">The app already auto-computes a "Wage" expense line from Entries every day. These are separately-added expense items labelled കൂലി/Wage/Coolie — almost always a duplicate that double-subtracts that day's wage from cash. Remove them, then re-save that date's Entry/Company Ledger.</div>`;
-      if (data.duplicateWageItems.length) {
-        html += `<table class="report-table"><thead><tr><th>Date</th><th>List</th><th>Label</th><th>Amount</th><th>Day's Wage</th><th></th></tr></thead><tbody>
-          ${data.duplicateWageItems.map((it) => `<tr><td>${dispDate(it.date)}</td><td>${it.type}</td><td>${it.label}</td><td>${it.amount}</td><td>${it.grossWage}</td><td><button class="action-btn" style="padding:2px 8px; font-size:11.5px;" onclick="deleteDuplicateWageItem('${it.date}','${it.type}','${it.label.replace(/'/g, "\\'")}',${it.amount})">Remove</button></td></tr>`).join("")}
-          </tbody></table>`;
-      } else {
-        html += `<div style="padding:8px 10px; font-size:13px; color:var(--accent-co);">None — no expense item labelled കൂലി/Wage/Coolie found in this range.</div>`;
-      }
-      html += `</div>`;
-
-      html += `<div class="card" style="margin-top:16px;"><div class="card-head" style="border-left-color: var(--rule);">Opening Balance Breaks</div>
-        <div style="padding:6px 10px; font-size:12px; color:var(--ink-soft);">On these dates the saved Opening Balance doesn't match the previous saved date's Cash Balance — usually because OB was typed in manually instead of auto-carrying, or the day's wage was inflated by a double-booked worker above.</div>`;
-      if (data.chainBreaks.length) {
-        html += `<table class="report-table"><thead><tr><th>Date</th><th>Prev Date</th><th>Prev CB</th><th>This OB</th><th>Diff</th></tr></thead><tbody>
-          ${data.chainBreaks.map((b) => `<tr><td>${dispDate(b.date)}</td><td>${dispDate(b.prevDate)}</td><td>${b.prevCb}</td><td>${b.curOb}</td><td>${b.diff}</td></tr>`).join("")}
-          </tbody></table>`;
-      } else {
-        html += `<div style="padding:8px 10px; font-size:13px; color:var(--accent-co);">None — the Opening Balance chain is unbroken across saved dates in this range.</div>`;
-      }
-      html += `</div>`;
 
       body.innerHTML = html;
     }
@@ -3173,23 +2813,6 @@
       document.getElementById("stock-cards").innerHTML = "";
     }
 
-    /* ================= Settings tab: collapsible sections ================= */
-    // Every Settings card starts collapsed (heading only); clicking the heading
-    // opens/closes it. The "workers" section additionally remembers its
-    // open/closed state per device (localStorage), since that's the one most
-    // likely to be left open by accident.
-    window.toggleSettingsSection = function (key) {
-      const body = document.getElementById("sec-" + key + "-body");
-      const head = document.getElementById("sec-" + key + "-head");
-      if (!body || !head) return;
-      const opening = body.style.display === "none";
-      body.style.display = opening ? "" : "none";
-      head.classList.toggle("open", opening);
-      if (key === "workers") {
-        try { localStorage.setItem("showWorkerNames", opening ? "1" : "0"); } catch (e) {}
-      }
-    };
-
     /* ================= Settings tab: workers ================= */
 
     let settingsWorkersCache = { CO: [], Spl: [], SP: [] };
@@ -3198,10 +2821,6 @@
       const workers = await fsGetWorkers();
       settingsWorkersCache = workers;
       renderSettings(workers);
-      let showNames = false;
-      try { showNames = localStorage.getItem("showWorkerNames") === "1"; } catch (e) {}
-      document.getElementById("sec-workers-body").style.display = showNames ? "" : "none";
-      document.getElementById("sec-workers-head").classList.toggle("open", showNames);
     };
 
     function renderSettings(workers) {
@@ -3215,7 +2834,7 @@
         const rowsHtml = nums.map((num, idx) => `
           <div class="field-row" style="padding:4px 10px; flex-wrap:wrap;">
             <span class="num" style="font-weight:bold;">${num}</span>
-            <input type="text" class="worker-name-input" placeholder="Name (optional, shown in Reports only)" value="${names[sec.key + '|' + num] || ''}"
+            <input type="text" placeholder="Name (optional, shown in Reports only)" value="${names[sec.key + '|' + num] || ''}"
               style="flex:1; min-width:120px; margin:0 8px; padding:3px 6px; border:1px solid #CBD8CC; border-radius:3px; font-size:12px;"
               onchange="saveWorkerNameUI('${sec.key}','${num}', this.value)">
             <span style="display:flex; gap:4px; align-items:center;">
@@ -3654,111 +3273,51 @@
       if (!date) return;
       root.innerHTML = "<p>Loading...</p>";
       try {
-        const [cashSummary, ledger, stock, entriesBySection, expenses, names] = await Promise.all([
-          fsGetCashSummary(date), fsGetCompanyLedgerForDate(date), fsGetStockForDate(date),
-          fsGetEntriesForDate(date), fsGetExpensesForDate(date), fsGetWorkerNames(),
-        ]);
-        renderHomeDayDetail(date, cashSummary, ledger, stock, entriesBySection, expenses, names);
+        const [cashSummary, ledger] = await Promise.all([fsGetCashSummary(date), fsGetCompanyLedgerForDate(date)]);
+        renderHomeDayDetail(date, cashSummary, ledger);
       } catch (err) {
         root.innerHTML = "<p>Error: " + err.message + "</p>";
       }
     };
 
-    // Per-worker "Advance" (patti) rows for a date, across all sections — used by
-    // the Home page's day-detail cards so worker-wise advance is visible there
-    // rather than only as a single lump total.
-    function workerAdvanceRows(entriesBySection, names) {
-      const rows = [];
-      SECTIONS.forEach((sec) => {
-        (entriesBySection[sec.key] || []).forEach((w) => {
-          const patti = Number(w.patti) || 0;
-          if (patti > 0) {
-            const name = names ? lookupWorkerName(names, identityPool(sec.key), w.number) : "";
-            rows.push({ section: sec.key, number: w.number, patti, name });
-          }
-        });
-      });
-      return rows;
-    }
-
-    function renderHomeDayDetail(date, cashSummary, l, stock, entriesBySection, expenses, names) {
+    function renderHomeDayDetail(date, cashSummary, l) {
       const root = document.getElementById("home-day-detail");
       let html = `<h1>${formatHeadingDate(date)}</h1>`;
 
-      const itemRow = (it) => `<div class="field-row"><span>${itemDisplay(it)}</span><span class="num">${it.amount}</span></div>`;
-      const advanceRows = entriesBySection ? workerAdvanceRows(entriesBySection, names) : [];
-      const advanceRowsHtml = advanceRows.length
-        ? advanceRows.map((r) => `<div class="field-row"><span>${r.section} #${r.number}${r.name ? " (" + r.name + ")" : ""}</span><span class="num">${r.patti}</span></div>`).join("")
-        : `<div style="padding:4px 10px; font-size:12px; color:var(--ink-soft);">None</div>`;
-      const staffItemsForDate = (expenses && expenses.StaffPayment) || [];
-
-      let cashAccountHtml = `<div class="card"><div class="card-head" style="border-left-color: var(--rule);">Daily Cash Account</div>`;
+      html += `<div class="card"><div class="card-head" style="border-left-color: var(--rule);">Daily Cash Account</div>`;
       if (cashSummary) {
-        cashAccountHtml += `
-          <div class="field-row"><span>PTS CASH</span><span class="num">${cashSummary.cashInHand}</span></div>
+        html += `
+          <div class="field-row"><span>Cash in Hand</span><span class="num">${cashSummary.cashInHand}</span></div>
           <div class="field-row"><span>Deposit — CO</span><span class="num">${cashSummary.advanceCO}</span></div>
           <div class="field-row"><span>Deposit — SP + Spl</span><span class="num">${cashSummary.advanceSPSpl}</span></div>
-          <div class="field-row highlight"><b>Total Available Cash</b><b class="num">${cashSummary.totalAvailable}</b></div>
-          <div class="field-row"><span>COOLIE (gross)</span><span class="num">${cashSummary.grossWage}</span></div>
-          <div class="expense-title" style="margin-top:6px;">Staff Payment</div>
-          ${staffItemsForDate.filter((it) => Number(it.amount) > 0).map(itemRow).join("") || `<div style="padding:4px 10px; font-size:12px; color:var(--ink-soft);">None</div>`}
-          <div class="field-row"><b>Staff Payment (Total)</b><b class="num">${cashSummary.staffTotal}</b></div>
+          <div class="field-row"><b>Total Available</b><b class="num">${cashSummary.totalAvailable}</b></div>
+          <div class="field-row"><span>Wage (gross)</span><span class="num">${cashSummary.grossWage}</span></div>
+          <div class="field-row"><span>Staff Payments</span><span class="num">${cashSummary.staffTotal}</span></div>
           <div class="field-row"><span>Other Expenses</span><span class="num">${cashSummary.otherTotal}</span></div>
-          <div class="expense-title" style="margin-top:6px;">Advance (worker records)</div>
-          ${advanceRowsHtml}
-          <div class="field-row"><b>Advance (Total)</b><b class="num">${cashSummary.pattiTotal}</b></div>
+          <div class="field-row"><span>Advance (worker records)</span><span class="num">${cashSummary.pattiTotal}</span></div>
           <div class="field-row"><span>Others (worker records)</span><span class="num">${cashSummary.othersTotal}</span></div>
-          <div class="field-row highlight"><b>Total Payment</b><b class="num">${cashSummary.totalOutgo}</b></div>
+          <div class="field-row"><b>Total Outgo</b><b class="num">${cashSummary.totalOutgo}</b></div>
           <div class="field-row"><b>Bal Cash</b><b class="num">${cashSummary.balCash}</b></div>`;
       } else {
-        cashAccountHtml += `<div style="padding:8px 10px; font-size:13px; color:var(--ink-soft);">Daily cash account not saved for this date yet.</div>`;
+        html += `<div style="padding:8px 10px; font-size:13px; color:var(--ink-soft);">Daily cash account not saved for this date yet.</div>`;
       }
-      cashAccountHtml += `</div>`;
+      html += `</div>`;
 
-      const companyLedgerHtml = `<div class="card"><div class="card-head" style="border-left-color: var(--rule);">Company Ledger</div>
-          <div class="field-row highlight"><b>Old Balance</b><b class="num">${l.ob}</b></div>
+      const itemRow = (it) => `<div class="field-row"><span>${it.label}</span><span class="num">${it.amount}</span></div>`;
+      html += `<div class="card"><div class="card-head" style="border-left-color: var(--rule);">Company Ledger</div>
+          <div class="field-row"><span>OB</span><span class="num">${l.ob}</span></div>
           <div class="field-row"><span>Deposit — CO</span><span class="num">${l.advanceCO}</span></div>
           <div class="field-row"><span>Deposit — SP+Spl</span><span class="num">${l.advanceSPSpl}</span></div>
           ${(l.incomeItems || []).filter((it) => it.amount > 0).map(itemRow).join("")}
           <div class="field-row"><b>Total Income</b><b class="num">${l.totalIncome}</b></div>
-          <div class="field-row"><span>COOLIE</span><span class="num">${l.grossWage}</span></div>
+          <div class="field-row"><span>Wage</span><span class="num">${l.grossWage}</span></div>
           ${(l.staffItems || []).filter((it) => it.amount > 0).map(itemRow).join("")}
           ${(l.otherItems || []).filter((it) => it.amount > 0).map(itemRow).join("")}
           ${(l.nonDailyItems || []).filter((it) => it.amount > 0).map(itemRow).join("")}
-          ${l.pattiTotal > 0 ? `<div class="expense-title" style="margin-top:6px;">Advance (worker records)</div>${advanceRowsHtml}<div class="field-row"><b>Advance (Total)</b><b class="num">${l.pattiTotal}</b></div>` : ""}
           <div class="field-row"><b>Total Expense</b><b class="num">${l.totalExpense}</b></div>
-          <div class="field-row highlight"><b>Cash Balance</b><b class="num">${l.closingBalance}</b></div>
+          <div class="field-row"><b>CB</b><b class="num">${l.closingBalance}</b></div>
         </div>`;
 
-      let productionHtml = "", stockBalanceHtml = "";
-      if (stock) {
-        const items = [
-          { key: "ORD", label: "ORD", accent: "var(--accent-co)" },
-          { key: "SPL", label: "SPL", accent: "var(--accent-spl)" },
-        ];
-        productionHtml = `<div class="card"><div class="card-head" style="border-left-color: var(--rule);">Today Production (item wise)</div>`;
-        items.forEach((it) => {
-          const d = stock[it.key] || {};
-          const b = toBundles(d.production || 0);
-          productionHtml += `<div class="field-row"><span>${it.label}</span><span class="num">${b.b} bundle, ${b.r} kettu</span></div>`;
-        });
-        productionHtml += `</div>`;
-
-        stockBalanceHtml = `<div class="card"><div class="card-head" style="border-left-color: var(--rule);">Stock Balance (item wise)</div>`;
-        items.forEach((it) => {
-          const d = stock[it.key] || {};
-          const opening = Number(d.opening) || 0;
-          const production = Number(d.production) || 0;
-          const saleTotal = sumAmt(d.saleItems);
-          const shortTotal = sumAmt(d.shortItems);
-          const closing = opening + production - saleTotal - shortTotal;
-          const cb = toBundles(closing);
-          stockBalanceHtml += `<div class="field-row"><span>${it.label}</span><span class="num">${cb.b} bundle, ${cb.r} kettu</span></div>`;
-        });
-        stockBalanceHtml += `</div>`;
-      }
-
-      html += cashAccountHtml + productionHtml + companyLedgerHtml + stockBalanceHtml;
       root.innerHTML = html;
     }
 
