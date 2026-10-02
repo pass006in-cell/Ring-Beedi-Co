@@ -2588,19 +2588,6 @@
       const summary = [["Section", "No.", "Receivable (കിട്ടാൻ)", "Payable (കൊടുക്കാൻ)"]];
       data.workers.forEach((w) => summary.push([w.section, w.number, w.net > 0 ? w.net : 0, w.net < 0 ? -w.net : 0]));
       addSheetFromAOA(wb, "Summary", summary);
-    }
-
-    function buildWorkerDueWorkbook(wb, data) {
-      const summary = [["Section", "No.", "Total Advance", "Total Deposit", "Payable", "Receivable"]];
-      data.workers.forEach((w) => {
-        const payable = w.net < 0 ? -w.net : 0;
-        const receivable = w.net > 0 ? w.net : 0;
-        summary.push([w.section, w.number, w.pattiTotal, w.advanceTotal, payable, receivable]);
-      });
-      summary.push([]);
-      summary.push(["Company Payable", data.totalPayable]);
-      summary.push(["Company Receivable", data.totalReceivable]);
-      addSheetFromAOA(wb, "Summary", summary);
 
       const history = [["Section", "No.", "Date", "Item (Section that day)", "Advance", "Deposit"]];
       data.workers.forEach((w) => {
