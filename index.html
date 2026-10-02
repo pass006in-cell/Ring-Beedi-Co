@@ -142,6 +142,7 @@
       <button class="day-btn tab-btn" id="tabbtn-ledger" onclick="switchTab('ledger')">Company Ledger</button>
       <button class="day-btn tab-btn" id="tabbtn-stock" onclick="switchTab('stock')">Stock</button>
       <button class="day-btn tab-btn" id="tabbtn-material" onclick="switchTab('material')">Material</button>
+      <button class="day-btn tab-btn" id="tabbtn-sales" onclick="switchTab('sales')">Sales</button>
       <button class="day-btn tab-btn" id="tabbtn-settings" onclick="switchTab('settings')">Settings</button>
       <button class="day-btn tab-btn" id="tabbtn-reports" onclick="switchTab('reports')">Reports</button>
       <button class="day-btn" onclick="doLogout()" style="margin-left:auto;">Logout</button>
@@ -294,6 +295,22 @@
           </div>
         </div>
       </div>
+    </div>
+    <div id="tab-sales" style="display:none">
+      <div class="card"><div class="card-head" style="border-left-color: var(--rule);">Credit Pending (party-wise)</div><div id="sl-credit" style="padding:6px 0"></div></div>
+      <div class="card"><div class="card-head" style="border-left-color: var(--accent-sp);">New Sale</div>
+        <div style="padding:10px;">
+          <div class="mrow"><input type="date" id="sl-date" class="mi"><select id="sl-item" class="mi"><option value="ORD">ORD</option><option value="SPL">SPL</option></select></div>
+          <input id="sl-party" class="mi" type="text" list="sl-parties" placeholder="Party / Buyer"><datalist id="sl-parties"></datalist>
+          <div class="mrow"><input id="sl-bundle" class="mi" type="text" inputmode="numeric" placeholder="Bundle"><input id="sl-kettu" class="mi" type="text" inputmode="numeric" placeholder="Kettu"></div>
+          <div class="mrow"><input id="sl-amount" class="mi" type="text" inputmode="decimal" placeholder="Total amount"><input id="sl-paid" class="mi" type="text" inputmode="decimal" placeholder="Received now"></div>
+          <input id="sl-desc" class="mi" type="text" placeholder="Description (bill no, vehicle, remarks...)">
+          <button class="action-btn primary" onclick="saveSale()">Save Sale</button>
+          <div class="status" id="sl-status"></div>
+        </div></div>
+      <div class="card"><div class="card-head" style="border-left-color: var(--rule);">Sales</div>
+        <div style="padding:10px;"><div class="day-picker"><input type="date" id="sr-start"><span>to</span><input type="date" id="sr-end"><button class="action-btn" onclick="renderSales()">Show</button></div>
+        <div id="sl-list"></div></div></div>
     </div>
     <div id="tab-material" style="display:none">
       <div class="card"><div class="card-head" style="border-left-color: var(--accent-co);">Leaf / Tobacco Stock (Kg)</div><div id="mat-stock" style="padding:6px 0"></div></div>
@@ -1876,7 +1893,79 @@
         <div class="stock-sub">CO / SP / Spl = number of workers with a beedi count that day.${matDefaults.length ? "" : " Set the per-worker Kg in Settings first."}</div>`;
     };
 
-    const ALL_TABS = ["home", "entry", "ledger", "stock", "material", "settings", "reports"];
+
+    /* ---------------- Sales register (credit tracking) ---------------- */
+    let slAll = [];
+    const slQty = (x) => mn(x.bundle) * 24 + mn(x.kettu);
+    const slFmt = (k) => `${Math.floor(k / 24)} bundle, ${k % 24} kettu`;
+    const slPaid = (x) => (x.payments || []).reduce((t, p) => t + mn(p.amount), 0);
+
+    window.loadSales = async function () {
+      if (!mid("sl-date").value) mid("sl-date").value = todayStr();
+      if (!mid("sr-end").value) {
+        mid("sr-end").value = todayStr();
+        mid("sr-start").value = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
+      }
+      const snap = await getDocs(collection(db, "sales"));
+      slAll = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (a.date < b.date ? 1 : -1));
+      renderSales();
+    };
+
+    window.renderSales = function () {
+      const by = {};
+      slAll.forEach((x) => { const b = mn(x.amount) - slPaid(x); if (b > 0) by[x.party || "-"] = (by[x.party || "-"] || 0) + b; });
+      const ps = Object.keys(by).sort(), tot = ps.reduce((t, p) => t + by[p], 0);
+      mid("sl-credit").innerHTML = ps.length
+        ? ps.map((p) => `<div class="field-row"><span>${mesc(p)}</span><b class="num" style="color:var(--rule)">₹${by[p]}</b></div>`).join("") + `<div class="field-row"><b>Total</b><b class="num">₹${tot}</b></div>`
+        : '<div class="field-row">No credit pending.</div>';
+      mid("sl-parties").innerHTML = [...new Set(slAll.map((x) => x.party).filter(Boolean))].map((p) => `<option value="${mesc(p)}">`).join("");
+      const a = mid("sr-start").value, b = mid("sr-end").value;
+      const list = slAll.filter((x) => (!a || x.date >= a) && (!b || x.date <= b));
+      const q = { ORD: 0, SPL: 0 }; let amt = 0;
+      list.forEach((x) => { q[x.item] = (q[x.item] || 0) + slQty(x); amt += mn(x.amount); });
+      const rows = list.map((x) => {
+        const bal = mn(x.amount) - slPaid(x);
+        const pays = (x.payments || []).map((p, i) => `<div style="font-size:11.5px;color:var(--ink-soft)">${dispDate(p.date)} · ₹${mn(p.amount)} ${mesc(p.note)} <button class="mbtn" onclick="delSalePayment('${x.id}',${i})">✕</button></div>`).join("");
+        return `<div style="border-bottom:1px dashed #D3DFD3;padding:6px 0">
+          <div class="field-row" style="padding:0"><span><b>${dispDate(x.date)}</b> · ${mesc(x.party)}</span><b class="num">₹${mn(x.amount)}</b></div>
+          <div style="font-size:12px">${x.item} · ${slFmt(slQty(x))}${x.desc ? " · " + mesc(x.desc) : ""}</div>${pays}
+          <div class="field-row" style="padding:2px 0"><span><button class="mbtn" onclick="addSaleReceipt('${x.id}')">+ Receipt</button><button class="mbtn" onclick="delSale('${x.id}')">Delete</button></span>
+          ${bal > 0 ? `<b class="num" style="color:var(--rule)">Balance ₹${bal}</b>` : '<span style="font-size:12px">Paid</span>'}</div></div>`;
+      }).join("");
+      mid("sl-list").innerHTML = (list.length ? `<div class="field-row" style="padding:2px 0"><span><b>Total</b> — ORD ${slFmt(q.ORD || 0)} · SPL ${slFmt(q.SPL || 0)}</span><b class="num">₹${amt}</b></div>` : "No sales in this range.") + rows;
+    };
+
+    window.saveSale = async function () {
+      const date = mid("sl-date").value, party = mid("sl-party").value.trim(), bundle = mn(mid("sl-bundle").value), kettu = mn(mid("sl-kettu").value),
+        amount = mn(mid("sl-amount").value), paid = mn(mid("sl-paid").value);
+      if (!date || !party || bundle + kettu <= 0 || amount <= 0) { mid("sl-status").textContent = "Enter date, party, quantity and amount"; return; }
+      if (paid > amount) { mid("sl-status").textContent = "Received is more than the amount"; return; }
+      await setDoc(doc(collection(db, "sales")), { date, party, item: mid("sl-item").value, bundle, kettu, amount, desc: mid("sl-desc").value.trim(), payments: paid > 0 ? [{ date, amount: paid, note: "At sale" }] : [] });
+      ["sl-party", "sl-bundle", "sl-kettu", "sl-amount", "sl-paid", "sl-desc"].forEach((i) => { mid(i).value = ""; });
+      mid("sl-status").textContent = "Saved";
+      await loadSales();
+    };
+    async function slSaveDoc(x) { const { id, ...rest } = x; await setDoc(doc(db, "sales", id), rest); await loadSales(); }
+    window.addSaleReceipt = async function (id) {
+      const x = slAll.find((r) => r.id === id), a = mn(prompt("Amount received"));
+      if (!x || a <= 0) return;
+      const dt = prompt("Date (YYYY-MM-DD)", todayStr()) || todayStr(), note = prompt("Note (optional)") || "";
+      x.payments = (x.payments || []).concat([{ date: dt, amount: a, note }]);
+      await slSaveDoc(x);
+    };
+    window.delSalePayment = async function (id, i) {
+      const x = slAll.find((r) => r.id === id);
+      if (!x || !confirm("Delete this receipt?")) return;
+      x.payments.splice(i, 1);
+      await slSaveDoc(x);
+    };
+    window.delSale = async function (id) {
+      if (!confirm("Delete this sale and its receipts?")) return;
+      await deleteDoc(doc(db, "sales", id));
+      await loadSales();
+    };
+
+    const ALL_TABS = ["home", "entry", "ledger", "stock", "material", "sales", "settings", "reports"];
     let historyDepth = 0; // 0 = at Home, 1 = in a sub-tab
 
     // When a Period Report line is clicked to edit it, this remembers where to
@@ -1893,6 +1982,7 @@
       if (name === "ledger") loadLedger();
       if (name === "stock") loadStock();
       if (name === "material") loadMaterial();
+      if (name === "sales") loadSales();
       if (name === "settings") { loadSettings(); loadRateTablesUI(); renderMatDefaults(); }
       if (name === "reports") switchReport("daily");
     }
@@ -3138,9 +3228,9 @@
         <div class="report-section"><h2>Summary</h2>
         <table class="report-table"><thead><tr><th>Section</th><th>No.</th><th>കിട്ടാൻ ഉള്ളത്</th><th>കൊടുക്കാൻ ഉള്ളത്</th><th></th></tr></thead><tbody>${rowsHtml}</tbody></table></div>
 
-        <div class="report-section"><h2>Company Overall</h2>
-        <table class="report-table"><thead><tr><th>Payable (Company owes)</th><th>Receivable (Workers owe)</th></tr></thead><tbody>
-          <tr><td class="report-net-neg">${data.totalPayable}</td><td class="report-net-pos">${data.totalReceivable}</td></tr>
+        <div class="report-section"><h2>കമ്പനി മൊത്തം</h2>
+        <table class="report-table"><thead><tr><th>കിട്ടാൻ ഉള്ളത്</th><th>കൊടുക്കാൻ ഉള്ളത്</th></tr></thead><tbody>
+          <tr><td class="report-net-pos">${data.totalReceivable}</td><td class="report-net-neg">${data.totalPayable}</td></tr>
         </tbody></table></div>`;
     }
 
