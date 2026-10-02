@@ -305,6 +305,7 @@
           <div class="mrow"><input id="sl-bundle" class="mi" type="text" inputmode="numeric" placeholder="Bundle"><input id="sl-kettu" class="mi" type="text" inputmode="numeric" placeholder="Kettu"></div>
           <div class="mrow"><input id="sl-amount" class="mi" type="text" inputmode="decimal" placeholder="Total amount"><input id="sl-paid" class="mi" type="text" inputmode="decimal" placeholder="Received now"></div>
           <input id="sl-desc" class="mi" type="text" placeholder="Description (bill no, vehicle, remarks...)">
+          <label style="font-size:12px;display:block;margin-bottom:6px"><input type="checkbox" id="sl-nopost"> Already in Ledger &amp; Stock (register only, do not post)</label>
           <button class="action-btn primary" onclick="saveSale()">Save Sale</button>
           <div class="status" id="sl-status"></div>
         </div></div>
@@ -318,7 +319,8 @@
         <div style="padding:10px;">
           <div class="mrow"><input type="date" id="mp-date" class="mi"><select id="mp-item" class="mi"><option value="leaf">Leaf (ഇല)</option><option value="tobacco">Tobacco (പുകയില)</option></select></div>
           <div class="mrow"><input id="mp-kg" class="mi" type="text" inputmode="decimal" placeholder="Kg"><input id="mp-rate" class="mi" type="text" inputmode="decimal" placeholder="Rate / Kg"><input id="mp-paid" class="mi" type="text" inputmode="decimal" placeholder="Paid now"></div>
-          <input id="mp-desc" class="mi" type="text" placeholder="Description (supplier, type, bill no...)">
+          <input id="mp-desc" class="mi" type="text" list="mp-descs" placeholder="Description (supplier, type, bill no...)"><datalist id="mp-descs"></datalist>
+          <label style="font-size:12px;display:block;margin-bottom:6px"><input type="checkbox" id="mp-nopost"> Already in Company Ledger (register only, do not post)</label>
           <button class="action-btn primary" onclick="saveMatPurchase()">Save Purchase</button>
           <div class="status" id="mat-status"></div>
         </div></div>
@@ -1830,6 +1832,7 @@
           <b class="num" style="color:${bal > 0 ? "var(--rule)" : "inherit"}">Balance ₹${bal}</b></div></div>`;
       }).join("");
       mid("mat-purchases").innerHTML = (matPurchases.length ? `<div class="field-row" style="padding:2px 0"><b>Total to pay</b><b class="num" style="color:var(--rule)">₹${out}</b></div>` : "No purchases yet.") + rows;
+      mid("mp-descs").innerHTML = [...new Set(matPurchases.map((p) => p.desc).filter(Boolean))].map((d) => `<option value="${mesc(d)}">`).join("");
       await renderMatStock();
     }
 
@@ -1847,31 +1850,44 @@
       }).join("") + `<div class="stock-sub" style="padding:0 10px">Issue counted from ${dispDate(from)} (earliest purchase). Enter opening stock as a purchase dated before that.</div>`;
     }
 
+    async function matSyncLedger(p, oldDates) {
+      if (!p.tag) return;
+      const by = sumByDate(p.payments), desired = {};
+      Object.keys(by).forEach((d) => { desired[d] = [{ item: "Purchase", description: `${MAT_NAME[p.item] || p.item}${p.desc ? " · " + p.desc : ""} · ${mn(p.kg)} Kg #${p.tag}`, amount: by[d] }]; });
+      await ledgerSync(p.tag, "NonDaily", desired, oldDates);
+    }
     window.saveMatPurchase = async function () {
       const date = mid("mp-date").value, kg = mn(mid("mp-kg").value), rate = mn(mid("mp-rate").value), paid = mn(mid("mp-paid").value);
       if (!date || kg <= 0) { mid("mat-status").textContent = "Enter date and Kg"; return; }
-      const payments = paid > 0 ? [{ date, amount: paid, note: "At purchase" }] : [];
-      await setDoc(doc(collection(db, "rawPurchases")), { date, item: mid("mp-item").value, kg, rate, amount: Math.round(kg * rate), desc: mid("mp-desc").value.trim(), payments });
+      const ref = doc(collection(db, "rawPurchases")), noPost = mid("mp-nopost").checked;
+      const p = { date, item: mid("mp-item").value, kg, rate, amount: Math.round(kg * rate), desc: mid("mp-desc").value.trim(), tag: ref.id.slice(0, 5), noPost,
+        payments: paid > 0 ? [{ date, amount: paid, note: "At purchase", post: !noPost }] : [] };
+      await setDoc(ref, p);
+      await matSyncLedger(p, []);
       ["mp-kg", "mp-rate", "mp-paid", "mp-desc"].forEach((i) => { mid(i).value = ""; });
-      mid("mat-status").textContent = "Saved";
+      mid("mp-nopost").checked = false;
+      mid("mat-status").textContent = noPost ? "Saved (register only)" : "Saved and posted to Company Ledger";
       await renderMatPurchases();
     };
-    async function matSavePurchaseDoc(p) { const { id, ...rest } = p; await setDoc(doc(db, "rawPurchases", id), rest); await renderMatPurchases(); }
+    async function matSavePurchaseDoc(p, oldDates) { await matSyncLedger(p, oldDates || []); const { id, ...rest } = p; await setDoc(doc(db, "rawPurchases", id), rest); await renderMatPurchases(); }
     window.addMatPayment = async function (id) {
       const p = matPurchases.find((x) => x.id === id), a = mn(prompt("Payment amount"));
       if (!p || a <= 0) return;
       const dt = prompt("Payment date (YYYY-MM-DD)", todayStr()) || todayStr(), note = prompt("Note (optional)") || "";
-      p.payments = (p.payments || []).concat([{ date: dt, amount: a, note }]);
+      const post = !p.noPost || confirm("Also add this payment to the Company Ledger expense?");
+      p.payments = (p.payments || []).concat([{ date: dt, amount: a, note, post }]);
       await matSavePurchaseDoc(p);
     };
     window.delMatPayment = async function (id, i) {
       const p = matPurchases.find((x) => x.id === id);
-      if (!p || !confirm("Delete this payment?")) return;
-      p.payments.splice(i, 1);
-      await matSavePurchaseDoc(p);
+      if (!p || !confirm("Delete this payment? (its Company Ledger line is removed too)")) return;
+      const gone = p.payments.splice(i, 1);
+      await matSavePurchaseDoc(p, postedDates(gone));
     };
     window.delMatPurchase = async function (id) {
-      if (!confirm("Delete this purchase and its payments?")) return;
+      const p = matPurchases.find((x) => x.id === id);
+      if (!p || !confirm("Delete this purchase and its payments? (Company Ledger lines are removed too)")) return;
+      await matSyncLedger({ ...p, payments: [] }, postedDates(p.payments));
       await deleteDoc(doc(db, "rawPurchases", id));
       await renderMatPurchases();
     };
@@ -1935,35 +1951,85 @@
       mid("sl-list").innerHTML = (list.length ? `<div class="field-row" style="padding:2px 0"><span><b>Total</b> — ORD ${slFmt(q.ORD || 0)} · SPL ${slFmt(q.SPL || 0)}</span><b class="num">₹${amt}</b></div>` : "No sales in this range.") + rows;
     };
 
+    async function slSyncLedger(x, oldDates) {
+      if (!x.tag) return;
+      const by = sumByDate(x.payments), desired = {};
+      Object.keys(by).forEach((d) => { desired[d] = [{ item: "Sale", description: `${x.party} · ${x.item} ${mn(x.bundle)}b ${mn(x.kettu)}k${x.desc ? " · " + x.desc : ""} #${x.tag}`, amount: by[d] }]; });
+      await ledgerSync(x.tag, "Income", desired, oldDates);
+    }
     window.saveSale = async function () {
       const date = mid("sl-date").value, party = mid("sl-party").value.trim(), bundle = mn(mid("sl-bundle").value), kettu = mn(mid("sl-kettu").value),
-        amount = mn(mid("sl-amount").value), paid = mn(mid("sl-paid").value);
+        amount = mn(mid("sl-amount").value), paid = mn(mid("sl-paid").value), noPost = mid("sl-nopost").checked;
       if (!date || !party || bundle + kettu <= 0 || amount <= 0) { mid("sl-status").textContent = "Enter date, party, quantity and amount"; return; }
       if (paid > amount) { mid("sl-status").textContent = "Received is more than the amount"; return; }
-      await setDoc(doc(collection(db, "sales")), { date, party, item: mid("sl-item").value, bundle, kettu, amount, desc: mid("sl-desc").value.trim(), payments: paid > 0 ? [{ date, amount: paid, note: "At sale" }] : [] });
+      const ref = doc(collection(db, "sales"));
+      const x = { date, party, item: mid("sl-item").value, bundle, kettu, amount, desc: mid("sl-desc").value.trim(), tag: ref.id.slice(0, 5), noPost,
+        payments: paid > 0 ? [{ date, amount: paid, note: "At sale", post: !noPost }] : [] };
+      await setDoc(ref, x);
+      if (!noPost) { await slSyncLedger(x, []); await stockSaleSync(date, x.item, x.tag, `${party} #${x.tag}`, slQty(x)); }
       ["sl-party", "sl-bundle", "sl-kettu", "sl-amount", "sl-paid", "sl-desc"].forEach((i) => { mid(i).value = ""; });
-      mid("sl-status").textContent = "Saved";
+      mid("sl-nopost").checked = false;
+      mid("sl-status").textContent = noPost ? "Saved (register only)" : "Saved and posted to Stock and Company Ledger";
       await loadSales();
     };
-    async function slSaveDoc(x) { const { id, ...rest } = x; await setDoc(doc(db, "sales", id), rest); await loadSales(); }
+    async function slSaveDoc(x, oldDates) { await slSyncLedger(x, oldDates || []); const { id, ...rest } = x; await setDoc(doc(db, "sales", id), rest); await loadSales(); }
     window.addSaleReceipt = async function (id) {
       const x = slAll.find((r) => r.id === id), a = mn(prompt("Amount received"));
       if (!x || a <= 0) return;
       const dt = prompt("Date (YYYY-MM-DD)", todayStr()) || todayStr(), note = prompt("Note (optional)") || "";
-      x.payments = (x.payments || []).concat([{ date: dt, amount: a, note }]);
+      const post = !x.noPost || confirm("Also add this receipt to the Company Ledger income?");
+      x.payments = (x.payments || []).concat([{ date: dt, amount: a, note, post }]);
       await slSaveDoc(x);
     };
     window.delSalePayment = async function (id, i) {
       const x = slAll.find((r) => r.id === id);
-      if (!x || !confirm("Delete this receipt?")) return;
-      x.payments.splice(i, 1);
-      await slSaveDoc(x);
+      if (!x || !confirm("Delete this receipt? (its Company Ledger line is removed too)")) return;
+      const gone = x.payments.splice(i, 1);
+      await slSaveDoc(x, postedDates(gone));
     };
     window.delSale = async function (id) {
-      if (!confirm("Delete this sale and its receipts?")) return;
+      const x = slAll.find((r) => r.id === id);
+      if (!x || !confirm("Delete this sale? (Stock and Company Ledger lines are removed too)")) return;
+      await slSyncLedger({ ...x, payments: [] }, postedDates(x.payments));
+      if (!x.noPost && x.tag) await stockSaleSync(x.date, x.item, x.tag, "", 0);
       await deleteDoc(doc(db, "sales", id));
       await loadSales();
     };
+
+
+    /* ---------------- Posting Sales / Purchases to Company Ledger and Stock ---------------- */
+    // Lines are linked by a short tag (e.g. "#a1B2c") kept in the line's description / label.
+    async function shiftLaterLedger(date, delta) {
+      if (!delta) return;
+      const snap = await getDocs(query(collection(db, "companyLedger"), where("date", ">", date)));
+      await Promise.all(snap.docs.map((d) => { const x = d.data(); return setDoc(d.ref, { ob: mn(x.ob) + delta, total: mn(x.total) + delta, cb: mn(x.cb) + delta }, { merge: true }); }));
+    }
+    async function ledgerSync(tag, type, desired, oldDates) {
+      const dates = [...new Set([...Object.keys(desired), ...oldDates])].sort();
+      for (const date of dates) {
+        const ex = await fsGetExpensesForDate(date), cur = ex[type];
+        const keep = cur.filter((i) => !(i.description || "").includes("#" + tag)), add = desired[date] || [];
+        if (!add.length && keep.length === cur.length) continue;
+        const lines = keep.concat(add);
+        await fsSaveCompanyLedger(date, "", type === "Income" ? lines : ex.Income, type === "NonDaily" ? lines : ex.NonDaily);
+        await shiftLaterLedger(date, (sumAmt(lines) - sumAmt(cur)) * (type === "Income" ? 1 : -1));
+      }
+    }
+    // q = kettu sold on that date for that item (0 removes the line)
+    async function stockSaleSync(date, item, tag, label, q) {
+      const st = await fsGetStockForDate(date), cur = st[item].saleItems || [];
+      const keep = cur.filter((i) => !(i.label || "").includes("#" + tag)), had = sumAmt(cur) - sumAmt(keep);
+      const data = {};
+      ["ORD", "SPL"].forEach((k) => { data[k] = { opening: "", saleItems: st[k].saleItems, shortItems: st[k].shortItems }; });
+      data[item].saleItems = q > 0 ? keep.concat([{ label, amount: q }]) : keep;
+      await fsSaveStock(date, data);
+      const delta = q - had;
+      if (!delta) return;
+      const snap = await getDocs(query(collection(db, "stock"), where("date", ">", date)));
+      await Promise.all(snap.docs.filter((d) => d.data().item === item).map((d) => { const x = d.data(); return setDoc(d.ref, { opening: mn(x.opening) - delta, closing: mn(x.closing) - delta }, { merge: true }); }));
+    }
+    const postedDates = (arr) => (arr || []).filter((x) => x.post !== false).map((x) => x.date);
+    const sumByDate = (arr) => { const by = {}; (arr || []).forEach((x) => { if (x.post !== false) by[x.date] = (by[x.date] || 0) + mn(x.amount); }); return by; };
 
     const ALL_TABS = ["home", "entry", "ledger", "stock", "material", "sales", "settings", "reports"];
     let historyDepth = 0; // 0 = at Home, 1 = in a sub-tab
@@ -3217,21 +3283,21 @@
 
     function renderWorkerDueReport(data) {
       const body = document.getElementById("report-body");
-      let idx = 0;
-      const rowsHtml = data.workers.map((w) => {
+      let rows = "", idx = 0, cur = null, sec = { r: 0, p: 0 }, all = { r: 0, p: 0 };
+      const totRow = (label, t) => `<tr style="font-weight:bold;background:#EFE9D2;"><td colspan="2">${label}</td><td class="report-net-pos">${t.r}</td><td class="report-net-neg">${t.p}</td><td></td></tr>`;
+      data.workers.forEach((w) => {
+        if (w.section !== cur) { if (cur !== null) rows += totRow(cur + " Total", sec); cur = w.section; sec = { r: 0, p: 0 }; }
         const payable = w.net < 0 ? -w.net : 0, receivable = w.net > 0 ? w.net : 0, myIdx = idx++;
+        sec.r += receivable; sec.p += payable; all.r += receivable; all.p += payable;
         const hist = w.history.map((h) => `<tr class="due-hist-${myIdx}" style="display:none;"><td colspan="2">${dispDate(h.date)} <span style="color:var(--ink-soft); font-size:10px;">(${h.section})</span></td><td colspan="2">Advance ${h.patti || 0} · Deposit ${h.advance || 0}</td><td></td></tr>`).join("");
-        return `<tr><td>${w.section}</td><td>${w.number}${w.name ? ' <span style="color:var(--ink-soft); font-size:10px;">(' + w.name + ')</span>' : ''}</td><td class="report-net-pos">${receivable || ""}</td><td class="report-net-neg">${payable || ""}</td><td><button class="add-row-btn due-toggle-btn" id="due-toggle-${myIdx}" onclick="toggleDueHistory(${myIdx})">+</button></td></tr>${hist}`;
-      }).join("");
+        rows += `<tr><td>${w.section}</td><td>${w.number}${w.name ? ' <span style="color:var(--ink-soft); font-size:10px;">(' + w.name + ')</span>' : ''}</td><td class="report-net-pos">${receivable || ""}</td><td class="report-net-neg">${payable || ""}</td><td><button class="add-row-btn due-toggle-btn" id="due-toggle-${myIdx}" onclick="toggleDueHistory(${myIdx})">+</button></td></tr>${hist}`;
+      });
+      if (cur !== null) rows += totRow(cur + " Total", sec);
+      rows += totRow("Full Total", all);
       body.innerHTML = `<h1>Workers Advance — Summary</h1>
         <p style="font-size:11px; color:var(--ink-soft);">Note: SP and Spl are merged into one worker pool (so even if a worker switches between producing ORD/SPL, their advance history stays together).</p>
         <div class="report-section"><h2>Summary</h2>
-        <table class="report-table"><thead><tr><th>Section</th><th>No.</th><th>കിട്ടാൻ ഉള്ളത്</th><th>കൊടുക്കാൻ ഉള്ളത്</th><th></th></tr></thead><tbody>${rowsHtml}</tbody></table></div>
-
-        <div class="report-section"><h2>കമ്പനി മൊത്തം</h2>
-        <table class="report-table"><thead><tr><th>കിട്ടാൻ ഉള്ളത്</th><th>കൊടുക്കാൻ ഉള്ളത്</th></tr></thead><tbody>
-          <tr><td class="report-net-pos">${data.totalReceivable}</td><td class="report-net-neg">${data.totalPayable}</td></tr>
-        </tbody></table></div>`;
+        <table class="report-table"><thead><tr><th>Section</th><th>No.</th><th>കിട്ടാൻ ഉള്ളത്</th><th>കൊടുക്കാൻ ഉള്ളത്</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
     }
 
     /* ================= Stock tab ================= */
