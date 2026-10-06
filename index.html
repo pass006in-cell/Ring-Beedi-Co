@@ -114,6 +114,21 @@
     .mi{font:inherit;font-size:13px;padding:6px;border:1px solid #C8D3C9;border-radius:3px;background:var(--card);width:100%;margin-bottom:6px;min-width:0}
   .mrow{display:flex;gap:6px}.mrow>*{flex:1;min-width:0}
   .mbtn{font:inherit;font-size:12px;padding:3px 8px;border:1px solid var(--rule);background:var(--card);border-radius:3px;margin-right:6px}
+
+  /* ---- Fit Entry & Report tables to the phone screen width (no sideways scroll) ---- */
+  @media (max-width: 700px) {
+    body { padding-left: 8px !important; padding-right: 8px !important; }
+    .rows-scroll { overflow-x: visible; }
+    table { min-width: 0 !important; table-layout: fixed; }
+    th, td { padding: 5px 2px; font-size: 12px; }
+    th { font-size: 10px; overflow-wrap: anywhere; }
+    td input { max-width: none; width: 100%; box-sizing: border-box; font-size: 13px; padding: 7px 2px; min-height: 34px; }
+    th:first-child, td:first-child { width: 11%; }
+    .report-section { padding: 8px 6px; overflow-x: visible; }
+    .report-table { min-width: 0 !important; table-layout: auto; font-size: 11px; }
+    .report-table th, .report-table td { padding: 3px 2px; overflow-wrap: anywhere; }
+    .report-table th { font-size: 9.5px; }
+  }
 </style>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
   <link rel="manifest" href="manifest.json">
