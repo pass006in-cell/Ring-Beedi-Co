@@ -1154,8 +1154,15 @@
       return { pool, number: String(number), name, totalDays, totalBeedi, totalKooli, totalPatti, totalAdvance, balance, last };
     }
 
-    async function fsGetWorkerDueReport() {
-      const [snap, names] = await Promise.all([getDocs(collection(db, "entries")), fsGetWorkerNames()]);
+    // Optional date range for the per-worker reports; blank start/end = no limit (all dates).
+    function entriesSnapForRange(start, end) {
+      const parts = [collection(db, "entries")];
+      if (start) parts.push(where("date", ">=", start));
+      if (end) parts.push(where("date", "<=", end));
+      return getDocs(parts.length > 1 ? query.apply(null, parts) : parts[0]);
+    }
+    async function fsGetWorkerDueReport(start, end) {
+      const [snap, names] = await Promise.all([entriesSnapForRange(start, end), fsGetWorkerNames()]);
       const byWorker = {};
       snap.forEach((docSnap) => {
         const r = docSnap.data();
@@ -1182,11 +1189,11 @@
       });
       const totalReceivable = workers.reduce((s, w) => s + (w.net > 0 ? w.net : 0), 0);
       const totalPayable = workers.reduce((s, w) => s + (w.net < 0 ? -w.net : 0), 0);
-      return { workers, totalReceivable, totalPayable };
+      return { workers, totalReceivable, totalPayable, start: start || "", end: end || "" };
     }
 
-    async function fsGetWorkerFullReport() {
-      const [snap, names] = await Promise.all([getDocs(collection(db, "entries")), fsGetWorkerNames()]);
+    async function fsGetWorkerFullReport(start, end) {
+      const [snap, names] = await Promise.all([entriesSnapForRange(start, end), fsGetWorkerNames()]);
       const byWorker = {};
       snap.forEach((docSnap) => {
         const r = docSnap.data();
@@ -1230,7 +1237,7 @@
         if (!isNaN(na) && !isNaN(nb)) return na - nb;
         return String(a.number).localeCompare(String(b.number));
       });
-      return { workers };
+      return { workers, start: start || "", end: end || "" };
     }
 
     async function fsGetStockBookReport(item, startDate, endDate) {
@@ -2820,6 +2827,36 @@
       addSheetFromAOA(wb, "Full History", history);
     }
 
+    // From/To pickers shared by Workers Advance and Worker Full Report. Both empty = all dates.
+    let workerRange = { start: "", end: "" };
+    function workerRangeControls(loadCall) {
+      return `<div class="day-picker">
+          <input type="date" id="report-w-start" value="${workerRange.start}">
+          <span>to</span>
+          <input type="date" id="report-w-end" value="${workerRange.end}">
+          <button class="action-btn" onclick="${loadCall}">Load</button>
+          <button class="day-btn" onclick="clearWorkerRange(this)">All dates</button>
+        </div>
+        <div class="stock-sub" style="margin:-8px 0 10px 0;">Leave both dates empty to see everything from the start.</div>`;
+    }
+    window.clearWorkerRange = function (btn) {
+      workerRange.start = ""; workerRange.end = "";
+      document.getElementById("report-w-start").value = ""; document.getElementById("report-w-end").value = "";
+      btn.closest(".day-picker").querySelector(".action-btn").click();
+    };
+    function readWorkerRange() {
+      const a = document.getElementById("report-w-start"), b = document.getElementById("report-w-end");
+      workerRange.start = a ? a.value : workerRange.start; workerRange.end = b ? b.value : workerRange.end;
+      if (workerRange.start && workerRange.end && workerRange.start > workerRange.end) {
+        const t = workerRange.start; workerRange.start = workerRange.end; workerRange.end = t;
+        if (a) a.value = workerRange.start; if (b) b.value = workerRange.end;
+      }
+      return workerRange;
+    }
+    const workerPeriodNote = (d) => (d && (d.start || d.end))
+      ? `<p style="font-size:12px;margin:2px 0 8px 0;"><b>Period:</b> ${d.start ? dispDate(d.start) : "start"} to ${d.end ? dispDate(d.end) : "today"} — only entries in this period are counted.</p>`
+      : `<p style="font-size:12px;margin:2px 0 8px 0;color:var(--ink-soft);">All dates</p>`;
+
     function renderReportControls() {
       const c = document.getElementById("report-controls");
       if (currentReport === "daily") {
@@ -2869,9 +2906,9 @@
         document.getElementById("report-stock-start").value = todayStr();
         document.getElementById("report-stock-end").value = todayStr();
       } else if (currentReport === "full") {
-        c.innerHTML = `<div class="day-picker"><button class="action-btn" onclick="loadWorkerFullReport()">Load</button></div>`;
+        c.innerHTML = workerRangeControls("loadWorkerFullReport()");
       } else {
-        c.innerHTML = `<div class="day-picker"><button class="action-btn" onclick="loadWorkerDueReport()">Load</button></div>`;
+        c.innerHTML = workerRangeControls("loadWorkerDueReport()");
       }
       document.getElementById("report-body").innerHTML = "";
     }
@@ -3204,14 +3241,16 @@
 
     window.loadWorkerDueReport = async function () {
       document.getElementById("report-body").innerHTML = "<p>Loading...</p>";
-      const data = await fsGetWorkerDueReport();
+      const r = readWorkerRange();
+      const data = await fsGetWorkerDueReport(r.start, r.end);
       lastReportData = data;
       renderWorkerDueReport(data);
     };
 
     window.loadWorkerFullReport = async function () {
       document.getElementById("report-body").innerHTML = "<p>Loading...</p>";
-      const data = await fsGetWorkerFullReport();
+      const r = readWorkerRange();
+      const data = await fsGetWorkerFullReport(r.start, r.end);
       lastReportData = data;
       renderWorkerFullReport(data);
     };
@@ -3246,7 +3285,7 @@
         blocks += rowsHtml;
       });
 
-      const html = `<h1>Worker Full Report</h1>
+      const html = `<h1>Worker Full Report</h1>${workerPeriodNote(data)}
         <p style="font-size:11px; color:var(--ink-soft);">SP and Spl are merged into one worker pool (a worker's full record stays together even if their item changes). Click "+" to see the ORD/SPL item-wise breakdown and full date-wise history.</p>
         <div class="report-section"><h2>Summary</h2>
         <table class="report-table"><thead><tr><th>Sec</th><th>No.</th><th>Beedi</th><th>Wage</th><th>Deposit</th><th>Advance</th><th>Others</th><th>Days</th><th></th></tr></thead><tbody>
@@ -3309,7 +3348,7 @@
       });
       if (cur !== null) rows += totRow(cur + " Total", sec);
       rows += totRow("Full Total", all);
-      body.innerHTML = `<h1>Workers Advance — Summary</h1>
+      body.innerHTML = `<h1>Workers Advance — Summary</h1>${workerPeriodNote(data)}
         <p style="font-size:11px; color:var(--ink-soft);">Note: SP and Spl are merged into one worker pool (so even if a worker switches between producing ORD/SPL, their advance history stays together).</p>
         <div class="report-section"><h2>Summary</h2>
         <table class="report-table"><thead><tr><th>Section</th><th>No.</th><th>കിട്ടാൻ ഉള്ളത്</th><th>കൊടുക്കാൻ ഉള്ളത്</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
