@@ -3345,16 +3345,23 @@
     function renderWorkerDueReport(data) {
       const body = document.getElementById("report-body");
       let rows = "", idx = 0, cur = null, sec = { r: 0, p: 0 }, all = { r: 0, p: 0 };
-      const totRow = (label, t) => `<tr style="font-weight:bold;background:#EFE9D2;"><td colspan="2">${label}</td><td class="report-net-pos">${t.r}</td><td class="report-net-neg">${t.p}</td><td></td></tr>`;
+      const totRow = (label, t, last) => {
+        const net = t.r - t.p;
+        const word = net > 0 ? label.replace(" Total", "") + " കിട്ടാൻ" : label.replace(" Total", "") + " കൊടുക്കാൻ";
+        const cls = net > 0 ? "report-net-pos" : "report-net-neg";
+        return `<tr style="font-weight:bold;background:#EFE9D2;"><td colspan="2">${label}</td><td class="report-net-pos">${t.r}</td><td class="report-net-neg">${t.p}</td><td></td></tr>
+          <tr style="font-weight:bold;background:#F7F2DE;"><td colspan="2">${word}</td><td colspan="2" class="${cls}" style="text-align:right;">${Math.abs(net)}</td><td></td></tr>
+          ${last ? "" : '<tr class="due-gap"><td colspan="5" style="height:22px;border:none;background:transparent;"></td></tr>'}`;
+      };
       data.workers.forEach((w) => {
         if (w.section !== cur) { if (cur !== null) rows += totRow(cur + " Total", sec); cur = w.section; sec = { r: 0, p: 0 }; }
         const payable = w.net < 0 ? -w.net : 0, receivable = w.net > 0 ? w.net : 0, myIdx = idx++;
         sec.r += receivable; sec.p += payable; all.r += receivable; all.p += payable;
         const hist = w.history.map((h) => `<tr class="due-hist-${myIdx}" style="display:none;"><td colspan="2">${dispDate(h.date)} <span style="color:var(--ink-soft); font-size:10px;">(${h.section})</span></td><td colspan="2">Advance ${h.patti || 0} · Deposit ${h.advance || 0}</td><td></td></tr>`).join("");
-        rows += `<tr><td>${w.section}</td><td>${w.number}${w.name ? ' <span style="color:var(--ink-soft); font-size:10px;">(' + w.name + ')</span>' : ''}</td><td class="report-net-pos">${receivable || ""}</td><td class="report-net-neg">${payable || ""}</td><td><button class="add-row-btn due-toggle-btn" id="due-toggle-${myIdx}" onclick="toggleDueHistory(${myIdx})">+</button></td></tr>${hist}`;
+        rows += `<tr><td>${w.section}</td><td>${w.number}</td><td class="report-net-pos">${receivable || ""}</td><td class="report-net-neg">${payable || ""}</td><td><button class="add-row-btn due-toggle-btn" id="due-toggle-${myIdx}" onclick="toggleDueHistory(${myIdx})">+</button></td></tr>${hist}`;
       });
       if (cur !== null) rows += totRow(cur + " Total", sec);
-      rows += totRow("Full Total", all);
+      rows += totRow("Full Total", all, true);
       body.innerHTML = `<h1>Workers Advance — Summary</h1>${workerPeriodNote(data)}
         <p style="font-size:11px; color:var(--ink-soft);">Note: SP and Spl are merged into one worker pool (so even if a worker switches between producing ORD/SPL, their advance history stays together).</p>
         <div class="report-section"><h2>Summary</h2>
