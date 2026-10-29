@@ -129,6 +129,13 @@
     .report-table th, .report-table td { padding: 3px 2px; overflow-wrap: anywhere; }
     .report-table th { font-size: 9.5px; }
   }
+  /* Worker Full Report: numbers and headings stay on ONE line (expanded history rows with colspan may still wrap) */
+  .wfr-table th, .wfr-table td:not([colspan]) { white-space: nowrap !important; overflow-wrap: normal !important; word-break: normal !important; }
+  @media (max-width: 700px) {
+    .wfr-table th, .wfr-table td { padding-left: 2px !important; padding-right: 2px !important; font-size: 11px; }
+    .wfr-table th { font-size: 9px; }
+    .wfr-table .add-row-btn { padding: 0 3px; }
+  }
 </style>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
   <link rel="manifest" href="manifest.json">
@@ -3275,7 +3282,7 @@
             `<tr class="due-hist-${myIdx} due-hist-row" style="display:none;"><td colspan="2">${dispDate(h.date)} (${h.item})</td><td>${h.beedi || 0}</td><td>${h.kooli || 0}</td><td>${h.advance || 0}</td><td>${h.patti || 0}</td><td>${h.others || 0}</td><td></td><td></td></tr>`
           ).join("");
           return `<tr>
-              <td>${w.section}</td><td><button class="add-row-btn" style="font-weight:bold; text-decoration:underline; padding:0;" onclick="showWorkerLedger('${w.section}','${w.number}')">${w.number}</button>${w.name ? ' <span style="color:var(--ink-soft); font-size:11px;">(' + w.name + ')</span>' : ''}</td>
+              <td>${w.section}</td><td><button class="add-row-btn" style="font-weight:bold; text-decoration:underline; padding:0;" onclick="showWorkerLedger('${w.section}','${w.number}')">${w.number}</button></td>
               <td>${w.grand.beedi}</td><td>${w.grand.kooli}</td><td>${w.grand.advance}</td><td>${w.grand.patti}</td><td>${w.grand.others}</td><td>${w.grand.days}</td>
               <td><button class="add-row-btn due-toggle-btn" id="due-toggle-${myIdx}" onclick="toggleDueHistory(${myIdx})">+</button></td>
             </tr>
@@ -3288,7 +3295,7 @@
       const html = `<h1>Worker Full Report</h1>${workerPeriodNote(data)}
         <p style="font-size:11px; color:var(--ink-soft);">SP and Spl are merged into one worker pool (a worker's full record stays together even if their item changes). Click "+" to see the ORD/SPL item-wise breakdown and full date-wise history.</p>
         <div class="report-section"><h2>Summary</h2>
-        <table class="report-table"><thead><tr><th>Sec</th><th>No.</th><th>Beedi</th><th>Wage</th><th>Deposit</th><th>Advance</th><th>Others</th><th>Days</th><th></th></tr></thead><tbody>
+        <table class="report-table wfr-table"><thead><tr><th>Sec</th><th>No.</th><th>Beedi</th><th>Wage</th><th>Deposit</th><th>Advance</th><th>Others</th><th>Days</th><th></th></tr></thead><tbody>
         ${blocks}
         </tbody></table></div>`;
       body.innerHTML = html;
@@ -3316,14 +3323,14 @@
         <div class="no-print" style="margin-bottom:10px;">
           <button class="day-btn" onclick="backToWorkerFullReport()">← Back to Summary</button>
         </div>
-        <h1>${section} — ${number}${w.name ? " (" + w.name + ")" : ""} — Day-wise Ledger</h1>
+        <h1>${section} — ${number} — Day-wise Ledger</h1>
         <div class="card"><div class="card-head" style="border-left-color: var(--rule);">Totals</div>
           <div class="field-row"><span>ORD</span><span class="num">Beedi ${w.items.ORD.beedi}, Wage ${w.items.ORD.kooli}, Deposit ${w.items.ORD.advance}, Advance ${w.items.ORD.patti}, Others ${w.items.ORD.others}, Days ${w.items.ORD.days}</span></div>
           <div class="field-row"><span>SPL</span><span class="num">Beedi ${w.items.SPL.beedi}, Wage ${w.items.SPL.kooli}, Deposit ${w.items.SPL.advance}, Advance ${w.items.SPL.patti}, Others ${w.items.SPL.others}, Days ${w.items.SPL.days}</span></div>
           <div class="field-row"><b>Grand Total</b><b class="num">Beedi ${w.grand.beedi}, Wage ${w.grand.kooli}, Deposit ${w.grand.advance}, Advance ${w.grand.patti}, Others ${w.grand.others}, Days ${w.grand.days}</b></div>
         </div>
         <div class="report-section"><h2>Day-wise History</h2>
-          <table class="report-table"><thead><tr><th>Date</th><th>Item</th><th>Beedi</th><th>Wage</th><th>Deposit</th><th>Balance</th><th>Advance</th><th>Others</th></tr></thead><tbody>
+          <table class="report-table wfr-table"><thead><tr><th>Date</th><th>Item</th><th>Beedi</th><th>Wage</th><th>Deposit</th><th>Balance</th><th>Advance</th><th>Others</th></tr></thead><tbody>
           ${rows || '<tr><td colspan="8">No history</td></tr>'}
           </tbody></table>
         </div>
